@@ -1,18 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, CreditCard, Banknote, Landmark, Pencil, Trash2, Calendar, Target } from 'lucide-react';
+import { Plus, CreditCard, Banknote, Landmark, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCurrency } from '@/context/CurrencyContext';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories';
 import { api } from '@/lib/api';
+import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
 
 interface Expense {
   _id: string;
@@ -152,7 +153,7 @@ export default function Dashboard() {
   })()
 
   // Budget Utilization Logic
-  let budgetUtilization: { category: string, allocated: number, spent: number, remaining: number, percentage: number }[] = [];
+  let budgetUtilization: { category: string, allocated: number, spent: number, remaining: number, percentage: number, rawPercentage: number }[] = [];
   if (activeBudget) {
     const start = new Date(activeBudget.startDate).getTime();
     const end = new Date(activeBudget.endDate).setHours(23, 59, 59, 999);
@@ -167,17 +168,39 @@ export default function Dashboard() {
         .filter(e => e.category === cat.name)
         .reduce((sum, e) => sum + e.amount, 0);
       const remaining = cat.allocatedAmount - spent;
-      const percentage = cat.allocatedAmount > 0 ? Math.min((spent / cat.allocatedAmount) * 100, 100) : 0;
-      
+      const rawPercentage = cat.allocatedAmount > 0 ? (spent / cat.allocatedAmount) * 100 : 0;
+
       return {
         category: cat.name,
         allocated: cat.allocatedAmount,
         spent,
         remaining,
-        percentage
+        // Capped — drives bar width, which can never exceed its track.
+        percentage: Math.min(rawPercentage, 100),
+        // Uncapped — what gets displayed, so 140% doesn't read as 100%.
+        rawPercentage,
       };
     });
+
+    // Rank by spend, heaviest first. Allocation breaks ties so a fresh budget
+    // (every category at zero) still ranks by intent rather than arbitrarily.
+    budgetUtilization.sort((a, b) => b.spent - a.spent || b.allocated - a.allocated);
   }
+
+  // Roll-up for the summary strip above the rows.
+  const budgetSummary = (() => {
+    if (!activeBudget) return null;
+
+    const allocated = budgetUtilization.reduce((sum, c) => sum + c.allocated, 0);
+    const spent = budgetUtilization.reduce((sum, c) => sum + c.spent, 0);
+    const percentage = allocated > 0 ? (spent / allocated) * 100 : 0;
+
+    const end = new Date(activeBudget.endDate).setHours(23, 59, 59, 999);
+    const msLeft = end - Date.now();
+    const daysLeft = msLeft > 0 ? Math.ceil(msLeft / 86_400_000) : 0;
+
+    return { allocated, spent, remaining: allocated - spent, percentage, daysLeft };
+  })();
 
   // Shared expense form
   const ExpenseForm = ({ onSubmit, submitLabel }: { onSubmit: (e: React.FormEvent) => void; submitLabel: string }) => (
@@ -271,49 +294,13 @@ export default function Dashboard() {
         </div>
 
         {/* Active Budget Utilization */}
-        {activeBudget && (
-          <Card className="border-muted shadow-sm rounded-2xl bg-card">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base sm:text-lg flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <span className="flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary flex-shrink-0" />
-                  Active Budget Utilization
-                </span>
-                <span className="text-xs sm:text-sm font-normal text-muted-foreground flex items-center gap-1.5">
-                  <Calendar className="w-4 h-4 flex-shrink-0" />
-                  {new Date(activeBudget.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} -{' '}
-                  {new Date(activeBudget.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 pt-2">
-                {budgetUtilization.map((cat, idx) => (
-                  <div key={idx} className="space-y-2">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="font-semibold">{cat.category}</span>
-                      <span className="text-muted-foreground">
-                        <span className={cat.remaining < 0 ? 'text-destructive font-semibold' : 'font-medium text-foreground'}>
-                          {formatAmount(cat.spent)}
-                        </span>
-                        <span className="mx-1">/</span>
-                        {formatAmount(cat.allocated)}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className={cn("h-full rounded-full transition-all duration-500", cat.percentage >= 100 ? "bg-destructive" : cat.percentage > 80 ? "bg-amber-500" : "bg-primary")} 
-                        style={{ width: `${cat.percentage}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground text-right">
-                      {cat.remaining < 0 ? `-${formatAmount(Math.abs(cat.remaining))} over` : `${formatAmount(cat.remaining)} left`}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        {activeBudget && budgetSummary && (
+          <BudgetUtilizationCard
+            startDate={activeBudget.startDate}
+            endDate={activeBudget.endDate}
+            categories={budgetUtilization}
+            summary={budgetSummary}
+          />
         )}
 
         {/* Chart Area */}
