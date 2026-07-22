@@ -44,8 +44,13 @@ Set these service variables:
 | `JWT_SECRET` | `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
 | `NODE_ENV` | `production` |
 | `CORS_ORIGINS` | *(leave empty for now — fill in after step 3)* |
+| `NPM_CONFIG_PRODUCTION` | `false` |
 
 Do **not** set `PORT`; Railway injects it and the server reads it.
+
+`NPM_CONFIG_PRODUCTION=false` is required because the build runs `tsc`, which lives in
+`devDependencies`. With the default production setting npm omits those and the build
+fails with `tsc: not found`. It only affects the build image, not what runs.
 
 Then **Settings → Networking → Generate Domain** to get a public URL. Verify:
 
@@ -87,6 +92,19 @@ To also allow Vercel preview deployments, add their origins as a comma-separated
 Preview URLs are generated per-deploy, so this is easiest with a stable custom domain.
 
 ---
+
+## Gotcha: don't put `npm ci` in Railway's build command
+
+Nixpacks mounts a build cache at `/app/node_modules/.cache`. `npm ci` works by deleting
+`node_modules` wholesale before reinstalling, and it cannot remove a live mount:
+
+```
+npm error EBUSY: resource busy or locked, rmdir '/app/node_modules/.cache'
+```
+
+Railway already runs its own install phase before the build phase, so `buildCommand`
+should only ever be `npm run build`. Use `npm install` if you genuinely need to install
+inside the build phase — never `npm ci`.
 
 ## Gotcha: `VITE_API_URL` is build-time, not run-time
 
