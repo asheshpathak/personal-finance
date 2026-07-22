@@ -1,0 +1,28 @@
+export const EXPENSE_CATEGORIES = [
+  'Food & Groceries',
+  'Dining Out',
+  'Transport',
+  'Gas & Fuel',
+  'Utilities',
+  'Housing & Rent',
+  'Insurance',
+  'Healthcare',
+  'Fitness & Wellness',
+  'Entertainment',
+  'Vices (smoking/drinking)',
+  'Shopping',
+  'Clothing',
+  'Personal Care',
+  'Education',
+  'Childcare',
+  'Pets',
+  'Gifts & Donations',
+  'Travel',
+  'Subscriptions',
+  'Savings & Investments',
+  'Debt Payments',
+  'Taxes',
+  'Other',
+] as const;
+
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
