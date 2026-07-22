@@ -302,7 +302,7 @@ export default function Subscriptions() {
 
   return (
     <Layout>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 sm:gap-8">
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -317,14 +317,14 @@ export default function Subscriptions() {
                   <Plus className="w-4 h-4 mr-2" /> Add subscription
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 sm:mx-auto">
+              <DialogContent className="sm:max-w-[425px] rounded-2xl">
                 <DialogHeader><DialogTitle>Add subscription</DialogTitle></DialogHeader>
                 <SubscriptionForm onSubmit={handleAdd} submitLabel="Save subscription" {...formProps} />
               </DialogContent>
             </Dialog>
 
             <Dialog open={isEditOpen} onOpenChange={open => { setIsEditOpen(open); if (!open) resetForm(); }}>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 sm:mx-auto">
+              <DialogContent className="sm:max-w-[425px] rounded-2xl">
                 <DialogHeader><DialogTitle>Edit subscription</DialogTitle></DialogHeader>
                 <SubscriptionForm onSubmit={handleEdit} submitLabel="Update subscription" {...formProps} />
               </DialogContent>
@@ -332,16 +332,16 @@ export default function Subscriptions() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           {([
             { label: 'Daily', value: totals.daily },
             { label: 'Weekly', value: totals.weekly },
             { label: 'Monthly', value: totals.monthly },
             { label: 'Yearly', value: totals.yearly },
           ] as const).map(({ label, value }) => (
-            <Card key={label} className="rounded-2xl p-4 sm:p-5 border shadow-sm">
+            <Card key={label} className="rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
               <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">{label}</p>
-              <p className="text-xl sm:text-2xl font-bold tracking-tight">{formatAmount(value)}</p>
+              <p className="text-xl sm:text-2xl font-bold tracking-tight truncate tabular-nums">{formatAmount(value)}</p>
             </Card>
           ))}
         </div>
@@ -349,14 +349,14 @@ export default function Subscriptions() {
         <SubscriptionCategoryChart data={categorySpend} formatAmount={formatAmount} />
 
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
             <h2 className="text-base font-semibold text-muted-foreground flex items-center gap-2">
               <Repeat className="w-4 h-4" />
               All subscriptions ({subscriptions.length})
             </h2>
           </div>
 
-          <Card className="border shadow-sm bg-card rounded-2xl overflow-hidden hidden md:block">
+          <Card className="border shadow-sm bg-card rounded-2xl overflow-hidden hidden lg:block">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow className="border-b border-muted">
@@ -365,7 +365,7 @@ export default function Subscriptions() {
                   <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Amount</TableHead>
                   <TableHead className="font-semibold text-xs uppercase tracking-wider">Frequency</TableHead>
                   <TableHead className="font-semibold text-xs uppercase tracking-wider">Due Date</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider text-right hidden lg:table-cell">~Monthly</TableHead>
+                  <TableHead className="font-semibold text-xs uppercase tracking-wider text-right hidden xl:table-cell">~Monthly</TableHead>
                   <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -392,15 +392,15 @@ export default function Subscriptions() {
                       <TableCell className="text-muted-foreground whitespace-nowrap">
                         {formatDueDate(sub)}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground whitespace-nowrap hidden lg:table-cell">
+                      <TableCell className="text-right text-muted-foreground whitespace-nowrap hidden xl:table-cell">
                         {formatAmount(toMonthlyEquivalent(sub))}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEdit(sub)}>
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => openEdit(sub)}>
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(sub._id)}>
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(sub._id)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -412,7 +412,7 @@ export default function Subscriptions() {
             </Table>
           </Card>
 
-          <div className="md:hidden space-y-3">
+          <div className="lg:hidden space-y-3">
             {subscriptions.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground rounded-2xl border bg-card">
                 No subscriptions yet. Add your first one to see spend totals.
@@ -438,11 +438,11 @@ export default function Subscriptions() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(sub)}>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-muted-foreground hover:text-foreground" onClick={() => openEdit(sub)}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(sub._id)}>
+                      <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(sub._id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>

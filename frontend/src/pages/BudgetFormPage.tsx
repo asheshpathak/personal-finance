@@ -144,7 +144,7 @@ export default function BudgetFormPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <label htmlFor="isActive" className="flex items-center gap-3 py-2 min-h-[44px] cursor-pointer">
                 <input
                   type="checkbox"
                   id="isActive"
@@ -152,13 +152,13 @@ export default function BudgetFormPage() {
                   onChange={(e) => setIsActive(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300"
                 />
-                <Label htmlFor="isActive" className="cursor-pointer">Set as Active Budget</Label>
-              </div>
+                <span className="text-sm font-medium leading-none">Set as Active Budget</span>
+              </label>
 
               <div className="space-y-4 pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">Category Allocations</Label>
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddCategory} className="h-8">
+                  <Button type="button" variant="outline" size="sm" onClick={handleAddCategory} className="h-10">
                     <Plus className="w-4 h-4 mr-1" /> Add
                   </Button>
                 </div>

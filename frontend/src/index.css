@@ -70,7 +70,16 @@
   * {
     @apply border-border;
   }
+  html {
+    /* Stops iOS from inflating text in landscape. */
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground font-sans;
+    /* `clip` rather than `hidden`: hidden still creates a scroll container that
+       Safari can programmatically scroll sideways with no way to scroll back. */
+    overflow-x: clip;
+    /* Kills the vertical rubber-band that made the page feel like it never settles. */
+    overscroll-behavior-y: none;
   }
 }

@@ -32,7 +32,7 @@ export default function Login({ setAuth }: { setAuth: (auth: boolean) => void })
   };
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-muted/40 px-4">
+    <div className="flex min-h-dvh w-full items-center justify-center bg-muted/40 px-4 py-8">
       <Card className="w-full max-w-md shadow-lg border-muted">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold tracking-tight text-center">

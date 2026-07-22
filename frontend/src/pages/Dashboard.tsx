@@ -3,17 +3,15 @@ import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, CreditCard, Banknote, Landmark, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCurrency } from '@/context/CurrencyContext';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { EXPENSE_CATEGORIES } from '@/lib/expenseCategories';
 import { api } from '@/lib/api';
 import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
+import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
+import type { ExpenseFormValues } from '@/components/ExpenseForm';
 
 interface Expense {
   _id: string;
@@ -44,11 +42,9 @@ export default function Dashboard() {
   
   // Add Expense State
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [paymentMode, setPaymentMode] = useState('');
-  const [description, setDescription] = useState('');
-  
+  const [form, setForm] = useState<ExpenseFormValues>(emptyExpenseForm);
+  const patchForm = (patch: Partial<ExpenseFormValues>) => setForm(prev => ({ ...prev, ...patch }));
+
   // Edit Expense State
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
@@ -89,10 +85,20 @@ export default function Dashboard() {
     fetchActiveBudget();
   }, []);
 
+  // Send the date as local noon so the stored UTC instant can't slip to the
+  // adjacent day for users far from UTC.
+  const toPayload = (values: ExpenseFormValues) => ({
+    amount: Number(values.amount),
+    category: values.category,
+    paymentMode: values.paymentMode,
+    description: values.description,
+    date: new Date(`${values.date}T12:00:00`).toISOString(),
+  });
+
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/api/expenses', { amount: Number(amount), category, paymentMode, description });
+      await api.post('/api/expenses', toPayload(form));
       setIsAddOpen(false);
       resetForm();
       fetchExpenses();
@@ -105,7 +111,7 @@ export default function Dashboard() {
     e.preventDefault();
     if (!editExpenseId) return;
     try {
-      await api.put(`/api/expenses/${editExpenseId}`, { amount: Number(amount), category, paymentMode, description });
+      await api.put(`/api/expenses/${editExpenseId}`, toPayload(form));
       setIsEditOpen(false);
       resetForm();
       fetchExpenses();
@@ -126,18 +132,18 @@ export default function Dashboard() {
 
   const openEditDialog = (expense: Expense) => {
     setEditExpenseId(expense._id);
-    setAmount(expense.amount.toString());
-    setCategory(expense.category);
-    setPaymentMode(expense.paymentMode);
-    setDescription(expense.description || '');
+    setForm({
+      amount: expense.amount.toString(),
+      category: expense.category,
+      paymentMode: expense.paymentMode,
+      description: expense.description || '',
+      date: toDateInputValue(expense.date),
+    });
     setIsEditOpen(true);
   };
 
   const resetForm = () => {
-    setAmount('');
-    setCategory('');
-    setPaymentMode('');
-    setDescription('');
+    setForm(emptyExpenseForm());
     setEditExpenseId(null);
   };
 
@@ -202,46 +208,6 @@ export default function Dashboard() {
     return { allocated, spent, remaining: allocated - spent, percentage, daysLeft };
   })();
 
-  // Shared expense form
-  const ExpenseForm = ({ onSubmit, submitLabel }: { onSubmit: (e: React.FormEvent) => void; submitLabel: string }) => (
-    <form onSubmit={onSubmit} className="space-y-4 mt-4">
-      <div className="space-y-2">
-        <Label htmlFor="amount">Amount ($)</Label>
-        <Input id="amount" type="number" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="category">Category</Label>
-        <Select value={category} onValueChange={setCategory} required>
-          <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-          <SelectContent>
-            {EXPENSE_CATEGORIES.map(c => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="paymentMode">Payment Mode</Label>
-        <Select value={paymentMode} onValueChange={setPaymentMode} required>
-          <SelectTrigger><SelectValue placeholder="Select payment mode" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Credit Card">Credit Card</SelectItem>
-            <SelectItem value="Debit Card">Debit Card</SelectItem>
-            <SelectItem value="Cash">Cash</SelectItem>
-            <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="description">Description</Label>
-        <Input id="description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </div>
-      <div className="pt-4">
-        <Button type="submit" className="rounded-xl w-full bg-foreground text-background hover:bg-foreground/90">{submitLabel}</Button>
-      </div>
-    </form>
-  );
-
   return (
     <Layout>
       <div className="flex flex-col gap-6 sm:gap-8">
@@ -273,21 +239,21 @@ export default function Dashboard() {
                   Add Expense
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 sm:mx-auto">
+              <DialogContent className="sm:max-w-[425px] rounded-2xl">
                 <DialogHeader>
                   <DialogTitle>Add New Expense</DialogTitle>
                 </DialogHeader>
-                <ExpenseForm onSubmit={handleAddExpense} submitLabel="Save Expense" />
+                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAddExpense} submitLabel="Save Expense" />
               </DialogContent>
             </Dialog>
             
             {/* Edit dialog (opened programmatically) */}
             <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if(!open) resetForm(); }}>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl mx-4 sm:mx-auto">
+              <DialogContent className="sm:max-w-[425px] rounded-2xl">
                 <DialogHeader>
                   <DialogTitle>Edit Expense</DialogTitle>
                 </DialogHeader>
-                <ExpenseForm onSubmit={handleEditExpense} submitLabel="Update Expense" />
+                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleEditExpense} submitLabel="Update Expense" />
               </DialogContent>
             </Dialog>
           </div>
@@ -322,7 +288,7 @@ export default function Dashboard() {
                   key={f.key}
                   onClick={() => setActiveFilter(f.key)}
                   className={cn(
-                    'rounded-lg h-8 px-3.5 text-xs font-semibold transition-all duration-150',
+                    'rounded-lg h-11 md:h-9 px-4 text-xs font-semibold transition-all duration-150',
                     activeFilter === f.key
                       ? 'bg-foreground text-background shadow-sm'
                       : 'bg-muted/50 text-muted-foreground hover:bg-muted'
@@ -335,14 +301,14 @@ export default function Dashboard() {
           </div>
 
           {/* Desktop Table */}
-          <Card className="border-none shadow-sm bg-card rounded-2xl overflow-hidden hidden md:block">
+          <Card className="border shadow-sm bg-card rounded-2xl overflow-hidden hidden lg:block">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow className="border-b border-muted">
                   <TableHead className="font-semibold text-xs uppercase tracking-wider">Date</TableHead>
                   <TableHead className="font-semibold text-xs uppercase tracking-wider">Description</TableHead>
                   <TableHead className="font-semibold text-xs uppercase tracking-wider">Category</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider hidden lg:table-cell">Method</TableHead>
+                  <TableHead className="font-semibold text-xs uppercase tracking-wider hidden xl:table-cell">Method</TableHead>
                   <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Amount</TableHead>
                   <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Actions</TableHead>
                 </TableRow>
@@ -364,7 +330,7 @@ export default function Dashboard() {
                           {expense.category}
                         </span>
                       </TableCell>
-                      <TableCell className="hidden lg:table-cell">
+                      <TableCell className="hidden xl:table-cell">
                         <div className="flex items-center gap-2 text-muted-foreground whitespace-nowrap">
                           {expense.paymentMode === 'Credit Card' ? <CreditCard className="w-4 h-4"/> : 
                            expense.paymentMode === 'Cash' ? <Banknote className="w-4 h-4"/> : <Landmark className="w-4 h-4" />}
@@ -376,10 +342,10 @@ export default function Dashboard() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEditDialog(expense)}>
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => openEditDialog(expense)}>
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
+                          <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -392,7 +358,7 @@ export default function Dashboard() {
           </Card>
 
           {/* Mobile Card List */}
-          <div className="md:hidden space-y-3">
+          <div className="lg:hidden space-y-3">
             {filteredExpenses.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground rounded-2xl border bg-card">No expenses in this period.</div>
             ) : (
@@ -417,11 +383,11 @@ export default function Dashboard() {
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
                       <span className="font-bold text-base">{formatAmount(expense.amount)}</span>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEditDialog(expense)}>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-muted-foreground hover:text-foreground" onClick={() => openEditDialog(expense)}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
+                        <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>

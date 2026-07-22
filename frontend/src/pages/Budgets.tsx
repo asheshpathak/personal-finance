@@ -62,7 +62,7 @@ export default function Budgets() {
   return (
     <Layout>
       <div className="flex flex-col gap-6 sm:gap-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">Budget Planning</h1>
             <p className="text-muted-foreground mt-2">Manage and allocate your spending limits.</p>
@@ -100,7 +100,7 @@ export default function Budgets() {
                           {budget.isActive ? <span className="text-primary">Active</span> : <span className="text-muted-foreground">Inactive</span>}
                         </div>
                       </div>
-                      <div className="flex -mt-2 -mr-2 flex-shrink-0">
+                      <div className="flex gap-2 -mt-2 -mr-2 flex-shrink-0">
                         <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted" asChild>
                           <Link to={`/budgets/${budget._id}/edit`}>
                             <Pencil className="w-4 h-4" />

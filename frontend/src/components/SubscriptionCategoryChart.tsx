@@ -58,7 +58,7 @@ export function SubscriptionCategoryChart({ data, formatAmount }: SubscriptionCa
         </p>
       </div>
 
-      <div className="h-[220px] w-full">
+      <div className="h-[220px] w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
