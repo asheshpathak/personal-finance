@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,6 +10,7 @@ import { useCurrency } from '@/context/CurrencyContext';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { api } from '@/lib/api';
 import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
+import { CategorySpendChart } from '@/components/CategorySpendChart';
 import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
 import type { ExpenseFormValues } from '@/components/ExpenseForm';
 
@@ -20,6 +21,15 @@ interface Expense {
   paymentMode: string;
   description: string;
   date: string;
+  createdAt?: string;
+}
+
+/** Newest first, by expense day then by when it was recorded. Same-day entries
+ *  are stored at local noon, so `date` alone ties — createdAt breaks it. */
+function byRecency(a: Expense, b: Expense): number {
+  const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
+  if (byDate !== 0) return byDate;
+  return new Date(b.createdAt ?? b.date).getTime() - new Date(a.createdAt ?? a.date).getTime();
 }
 
 interface CategoryAllocation {
@@ -155,7 +165,7 @@ export default function Dashboard() {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     cutoff.setHours(0, 0, 0, 0);
-    return expenses.filter(e => new Date(e.date) >= cutoff);
+    return expenses.filter(e => new Date(e.date) >= cutoff).sort(byRecency);
   })()
 
   // Budget Utilization Logic
@@ -269,14 +279,8 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Chart Area */}
-        <Card className="border-muted shadow-sm rounded-2xl overflow-hidden bg-card">
-          <CardContent className="p-0">
-             <div className="h-48 sm:h-64 w-full bg-gradient-to-b from-muted/20 to-background flex items-center justify-center border-b border-dashed">
-                <span className="text-muted-foreground font-medium">Chart visualization here</span>
-             </div>
-          </CardContent>
-        </Card>
+        {/* Spending by Category */}
+        <CategorySpendChart expenses={expenses} formatAmount={formatAmount} />
 
         {/* Recent Transactions */}
         <div>

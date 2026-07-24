@@ -306,7 +306,7 @@ export default function Subscriptions() {
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">Subscriptions and Recurring expenses</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight sm:tracking-tighter">Subscriptions &amp; Recurring</h1>
             <p className="text-muted-foreground mt-1">Track recurring costs. Totals are normalized across all subscriptions.</p>
           </div>
 
@@ -341,7 +341,7 @@ export default function Subscriptions() {
           ] as const).map(({ label, value }) => (
             <Card key={label} className="rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
               <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">{label}</p>
-              <p className="text-xl sm:text-2xl font-bold tracking-tight truncate tabular-nums">{formatAmount(value)}</p>
+              <p className="text-lg sm:text-2xl font-bold tracking-tight tabular-nums break-words">{formatAmount(value)}</p>
             </Card>
           ))}
         </div>

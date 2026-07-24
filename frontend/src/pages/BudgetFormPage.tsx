@@ -121,7 +121,7 @@ export default function BudgetFormPage() {
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">
               {isEditing ? 'Edit Budget' : 'Create New Budget'}
             </h1>
-            <p className="text-muted-foreground mt-2">
+            <p className="text-muted-foreground mt-1">
               {isEditing ? 'Update your budget dates and category allocations.' : 'Set your spending limits by category.'}
             </p>
           </div>
@@ -191,12 +191,12 @@ export default function BudgetFormPage() {
                     <Button
                       type="button"
                       variant="destructive"
-                      size="icon"
-                      className="sm:mb-[2px] flex-shrink-0 self-end"
+                      className="w-full sm:w-9 sm:h-9 sm:p-0 sm:mb-[2px] flex-shrink-0 sm:self-end"
                       onClick={() => handleRemoveCategory(index)}
                       disabled={categories.length === 1}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 sm:mr-0 mr-2" />
+                      <span className="sm:hidden">Remove category</span>
                     </Button>
                   </div>
                 ))}

@@ -19,6 +19,15 @@ interface Expense {
   paymentMode: string;
   description: string;
   date: string;
+  createdAt?: string;
+}
+
+/** Newest first, by expense day then by when it was recorded. Same-day entries
+ *  are stored at local noon, so `date` alone ties — createdAt breaks it. */
+function byRecency(a: Expense, b: Expense): number {
+  const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
+  if (byDate !== 0) return byDate;
+  return new Date(b.createdAt ?? b.date).getTime() - new Date(a.createdAt ?? a.date).getTime();
 }
 
 type FilterKey = '1D' | '3D' | '5D' | '1W' | '1M' | 'ALL';
@@ -108,11 +117,15 @@ export default function Expenses() {
 
   const filteredExpenses = (() => {
     const filter = FILTERS.find(f => f.key === activeFilter)!;
-    if (!filter.days) return expenses;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - filter.days);
-    cutoff.setHours(0, 0, 0, 0);
-    return expenses.filter(e => new Date(e.date) >= cutoff);
+    const list = filter.days
+      ? expenses.filter(e => {
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - filter.days!);
+          cutoff.setHours(0, 0, 0, 0);
+          return new Date(e.date) >= cutoff;
+        })
+      : expenses;
+    return [...list].sort(byRecency);
   })();
 
   const totalFiltered = filteredExpenses.reduce((s, e) => s + e.amount, 0);
@@ -156,11 +169,11 @@ export default function Expenses() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           <Card className="rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
             <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">Total (all time)</p>
-            <p className="text-xl sm:text-2xl font-bold tracking-tight truncate tabular-nums">{formatAmount(expenses.reduce((s, e) => s + e.amount, 0))}</p>
+            <p className="text-lg sm:text-2xl font-bold tracking-tight tabular-nums break-words">{formatAmount(expenses.reduce((s, e) => s + e.amount, 0))}</p>
           </Card>
           <Card className="rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
             <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">Showing period</p>
-            <p className="text-xl sm:text-2xl font-bold tracking-tight truncate tabular-nums">{formatAmount(totalFiltered)}</p>
+            <p className="text-lg sm:text-2xl font-bold tracking-tight tabular-nums break-words">{formatAmount(totalFiltered)}</p>
           </Card>
           <Card className="col-span-2 sm:col-span-1 rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
             <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">Transactions</p>

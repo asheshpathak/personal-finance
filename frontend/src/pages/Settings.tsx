@@ -51,7 +51,7 @@ export default function Settings() {
         {/* Header */}
         <div>
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">Settings</h1>
-          <p className="text-muted-foreground mt-2">Configure your preferences for the dashboard.</p>
+          <p className="text-muted-foreground mt-1">Configure your preferences for the dashboard.</p>
         </div>
 
         {/* Currency Card */}

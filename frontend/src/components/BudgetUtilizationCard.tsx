@@ -137,9 +137,11 @@ export function BudgetUtilizationCard({
 
         <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-8">
           {/* ── Overall gauge ─────────────────────────────────────────── */}
-          <div className="flex items-center gap-5 lg:flex-col lg:gap-4 lg:w-44 lg:flex-shrink-0">
+          <div className="flex items-center gap-4 sm:gap-5 lg:flex-col lg:gap-4 lg:w-44 lg:flex-shrink-0">
             <div className="relative flex-shrink-0">
-              <svg width="148" height="148" viewBox="0 0 148 148" className="-rotate-90">
+              {/* Sized in CSS (not width/height attrs) so it scales down on the
+                  smallest screens, giving the numeric column more room. */}
+              <svg viewBox="0 0 148 148" className="-rotate-90 w-28 h-28 sm:w-[148px] sm:h-[148px]">
                 <circle
                   cx="74"
                   cy="74"

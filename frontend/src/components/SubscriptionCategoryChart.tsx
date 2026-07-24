@@ -89,15 +89,15 @@ export function SubscriptionCategoryChart({ data, formatAmount }: SubscriptionCa
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 border-t pt-4">
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t pt-4 sm:flex sm:flex-wrap sm:justify-center sm:gap-x-5">
         {chartData.map(item => (
-          <div key={item.category} className="flex items-center gap-1.5 text-xs">
+          <div key={item.category} className="flex items-center gap-1.5 text-xs min-w-0">
             <span
               className="h-2 w-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: item.fill }}
             />
-            <span className="text-muted-foreground">{item.category}</span>
-            <span className="font-medium tabular-nums">{item.percentage.toFixed(1)}%</span>
+            <span className="text-muted-foreground truncate">{item.category}</span>
+            <span className="font-medium tabular-nums flex-shrink-0 ml-auto sm:ml-0">{item.percentage.toFixed(1)}%</span>
           </div>
         ))}
       </div>

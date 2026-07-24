@@ -8,7 +8,9 @@ router.use(authenticateToken);
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const expenses = await Expense.find({ userId: req.user!.id }).sort({ date: -1 });
+    // date is the expense day (often stored at local noon, so same-day entries
+    // tie); createdAt breaks the tie by when it was actually recorded.
+    const expenses = await Expense.find({ userId: req.user!.id }).sort({ date: -1, createdAt: -1 });
     res.json(expenses);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });

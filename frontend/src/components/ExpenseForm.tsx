@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,11 +44,25 @@ export function ExpenseForm({
 }: {
   values: ExpenseFormValues;
   onChange: (patch: Partial<ExpenseFormValues>) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  /** May be async; the button shows a spinner and locks while it's pending. */
+  onSubmit: (e: React.FormEvent) => void | Promise<void>;
   submitLabel: string;
 }) {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (submitting) return; // guard against double-submit / double-tap
+    setSubmitting(true);
+    try {
+      await onSubmit(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="expense-amount">Amount</Label>
         <Input
@@ -116,9 +132,17 @@ export function ExpenseForm({
 
       <Button
         type="submit"
+        disabled={submitting}
         className="rounded-xl w-full h-11 bg-foreground text-background hover:bg-foreground/90"
       >
-        {submitLabel}
+        {submitting ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Saving…
+          </>
+        ) : (
+          submitLabel
+        )}
       </Button>
     </form>
   );

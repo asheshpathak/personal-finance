@@ -65,7 +65,7 @@ export default function Budgets() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">Budget Planning</h1>
-            <p className="text-muted-foreground mt-2">Manage and allocate your spending limits.</p>
+            <p className="text-muted-foreground mt-1">Manage and allocate your spending limits.</p>
           </div>
           <Button className="rounded-xl px-4 sm:px-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm w-full sm:w-auto" asChild>
             <Link to="/budgets/new">
