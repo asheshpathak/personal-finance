@@ -29,20 +29,46 @@ function NavLink({
   onNavigate: () => void;
 }) {
   return (
-    <Link to={item.path} onClick={onNavigate} title={item.name}>
+    <Link to={item.path} onClick={onNavigate} title={item.name} className="group relative block">
+      {/* Active indicator: a short violet bar on the left edge. */}
       <span
         className={cn(
-          'flex items-center gap-3 rounded-xl py-3 min-h-[44px] text-sm font-medium transition-all duration-200',
-          mobile ? 'px-3' : 'px-2 lg:px-3 justify-center lg:justify-start',
+          'absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-primary transition-all duration-200',
+          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-40',
+          !mobile && 'lg:block hidden'
+        )}
+      />
+      <span
+        className={cn(
+          'flex items-center gap-3.5 rounded-xl py-3 min-h-[44px] text-sm font-semibold transition-all duration-200',
+          mobile ? 'px-3.5' : 'px-3 lg:px-3.5 justify-center lg:justify-start',
           isActive
-            ? 'bg-foreground text-background shadow-sm'
-            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+            ? 'bg-white/[0.08] text-foreground'
+            : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground'
         )}
       >
-        <item.icon className="h-4 w-4 flex-shrink-0" />
+        <item.icon
+          className={cn(
+            'h-[1.15rem] w-[1.15rem] flex-shrink-0 transition-colors',
+            isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'
+          )}
+        />
         <span className={cn(!mobile && 'hidden lg:inline')}>{item.name}</span>
       </span>
     </Link>
+  );
+}
+
+function Wordmark({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-grad-from to-grad-to shadow-glow flex-shrink-0">
+        <span className="text-base font-extrabold leading-none text-white">T</span>
+      </div>
+      <span className={cn('text-xl font-extrabold tracking-tight', compact && 'hidden lg:inline')}>
+        Tetra
+      </span>
+    </div>
   );
 }
 
@@ -67,64 +93,52 @@ export function Sidebar() {
   return (
     <>
       {/* ── Desktop Sidebar (md+) ──────────────────────────── */}
-      <div className="hidden md:flex w-16 lg:w-64 border-r bg-background/50 backdrop-blur-xl h-dvh sticky top-0 flex-col justify-between py-6 px-2 lg:px-4 flex-shrink-0 transition-all duration-300">
-        <div>
-          {/* Logo */}
-          <div className="flex items-center gap-2 px-2 mb-8">
-            <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-background font-bold text-lg leading-none">T</span>
-            </div>
-            <span className="font-bold tracking-tight text-xl hidden lg:inline">Tetra</span>
+      <aside className="hidden md:flex w-[76px] lg:w-64 h-dvh sticky top-0 flex-col justify-between py-6 px-3 lg:px-4 flex-shrink-0 border-r border-white/[0.06] bg-black/20 backdrop-blur-xl transition-all duration-300">
+        <div className="min-w-0">
+          <div className="px-1.5 lg:px-2 mb-8">
+            <Wordmark compact />
           </div>
 
-          {/* Greeting */}
           <div className="mb-8 px-2 hidden lg:block">
-            <h2 className="text-lg font-semibold tracking-tight">Hi, User!</h2>
+            <h2 className="text-lg font-bold tracking-tight">Hi, User!</h2>
             <p className="text-sm text-muted-foreground">Welcome back</p>
           </div>
 
-          {/* Nav label */}
-          <div className="px-2 mb-2 text-xs font-semibold text-muted-foreground tracking-wider uppercase hidden lg:block">
-            Overview
+          <div className="px-2 mb-3 text-[11px] font-bold text-muted-foreground/70 tracking-[0.14em] uppercase hidden lg:block">
+            Menu
           </div>
 
           <nav className="space-y-1">
-            {navItems.map((item) => (
+            {navItems.map(item => (
               <NavLink key={item.name} item={item} isActive={isActive(item.path)} onNavigate={closeDrawer} />
             ))}
           </nav>
         </div>
 
-        {/* Logout */}
-        <div className="px-2">
+        <div className="px-1">
           <Button
             variant="ghost"
-            className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl hidden lg:flex"
+            className="w-full justify-start gap-3.5 px-3.5 text-muted-foreground hover:text-foreground rounded-xl hidden lg:flex"
             onClick={handleLogout}
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-[1.15rem] w-[1.15rem]" />
             Log out
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="w-full text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl flex lg:hidden"
+            className="w-full text-muted-foreground hover:text-foreground rounded-xl flex lg:hidden"
             onClick={handleLogout}
             title="Log out"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-[1.15rem] w-[1.15rem]" />
           </Button>
         </div>
-      </div>
+      </aside>
 
       {/* ── Mobile Top Bar ────────────────────────────────── */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-background/80 backdrop-blur-xl border-b pt-[env(safe-area-inset-top)] box-content">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-foreground rounded-lg flex items-center justify-center">
-            <span className="text-background font-bold text-sm leading-none">T</span>
-          </div>
-          <span className="font-bold tracking-tight text-lg">Tetra</span>
-        </div>
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 h-14 bg-background/70 backdrop-blur-xl border-b border-white/[0.06] pt-[env(safe-area-inset-top)] box-content">
+        <Wordmark />
         <Button
           variant="ghost"
           size="icon"
@@ -134,41 +148,41 @@ export function Sidebar() {
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
-      </div>
+      </header>
 
       {/* ── Mobile Drawer ─────────────────────────────────── */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-in fade-in"
           onClick={() => setMobileOpen(false)}
         />
       )}
       <div
         className={cn(
-          'md:hidden fixed top-[calc(3.5rem+env(safe-area-inset-top))] left-0 bottom-0 z-50 w-72 max-w-[85vw] bg-background border-r shadow-2xl transition-transform duration-300 flex flex-col',
+          'md:hidden fixed top-[calc(3.5rem+env(safe-area-inset-top))] left-0 bottom-0 z-50 w-72 max-w-[85vw] bg-[hsl(250_22%_8%)] border-r border-white/[0.06] shadow-elevated transition-transform duration-300 ease-out flex flex-col',
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="flex flex-col h-full py-6 px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain">
           <div className="mb-6">
-            <h2 className="text-lg font-semibold tracking-tight">Hi, User!</h2>
+            <h2 className="text-lg font-bold tracking-tight">Hi, User!</h2>
             <p className="text-sm text-muted-foreground">Welcome back</p>
           </div>
-          <div className="px-2 mb-2 text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-            Overview
+          <div className="px-2 mb-3 text-[11px] font-bold text-muted-foreground/70 tracking-[0.14em] uppercase">
+            Menu
           </div>
           <nav className="space-y-1 flex-1 min-h-0">
-            {navItems.map((item) => (
+            {navItems.map(item => (
               <NavLink key={item.name} item={item} mobile isActive={isActive(item.path)} onNavigate={closeDrawer} />
             ))}
           </nav>
-          <div className="pt-4 border-t mt-4">
+          <div className="pt-4 border-t border-white/[0.06] mt-4">
             <Button
               variant="ghost"
-              className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl"
+              className="w-full justify-start gap-3.5 px-3.5 text-muted-foreground hover:text-foreground rounded-xl"
               onClick={handleLogout}
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-[1.15rem] w-[1.15rem]" />
               Log out
             </Button>
           </div>

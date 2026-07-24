@@ -133,7 +133,7 @@ export function ExpenseForm({
       <Button
         type="submit"
         disabled={submitting}
-        className="rounded-xl w-full h-11 bg-foreground text-background hover:bg-foreground/90"
+        className="w-full h-12 mt-1"
       >
         {submitting ? (
           <>

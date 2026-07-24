@@ -113,10 +113,8 @@ export default function Settings() {
                 onClick={handleSave}
                 disabled={!hasChanges && !saved}
                 className={cn(
-                  'rounded-xl px-8 transition-all duration-300 w-full sm:w-auto',
-                  saved
-                    ? 'bg-green-600 hover:bg-green-600 text-white'
-                    : 'bg-foreground text-background hover:bg-foreground/90'
+                  'px-8 transition-all duration-300 w-full sm:w-auto',
+                  saved && 'bg-success text-white hover:bg-success hover:brightness-100'
                 )}
               >
                 {saved ? (

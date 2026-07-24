@@ -150,7 +150,7 @@ export default function BudgetFormPage() {
                   id="isActive"
                   checked={isActive}
                   onChange={(e) => setIsActive(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300"
+                  className="w-5 h-5 rounded border-white/20 bg-white/[0.04] accent-primary [color-scheme:dark]"
                 />
                 <span className="text-sm font-medium leading-none">Set as Active Budget</span>
               </label>
@@ -210,7 +210,7 @@ export default function BudgetFormPage() {
                 <Button type="button" variant="outline" className="rounded-xl sm:flex-1" onClick={() => navigate('/budgets')}>
                   Cancel
                 </Button>
-                <Button type="submit" className="rounded-xl sm:flex-1 bg-foreground text-background hover:bg-foreground/90">
+                <Button type="submit" className="sm:flex-1 h-12">
                   {isEditing ? 'Update Budget' : 'Save Budget'}
                 </Button>
               </div>

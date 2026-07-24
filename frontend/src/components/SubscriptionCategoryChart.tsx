@@ -2,21 +2,23 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Card } from '@/components/ui/card';
 import type { CategorySpend } from '@/lib/subscriptionTotals';
 
+// Dark-friendly categorical palette, anchored on the brand violet. Distinct,
+// vibrant hues that stay legible on the charcoal canvas.
 const CHART_COLORS = [
-  'hsl(25, 95%, 53%)',
-  'hsl(220, 70%, 50%)',
-  'hsl(262, 55%, 52%)',
-  'hsl(160, 55%, 40%)',
-  'hsl(330, 65%, 52%)',
-  'hsl(195, 70%, 42%)',
-  'hsl(45, 90%, 48%)',
-  'hsl(240, 5%, 45%)',
-  'hsl(25, 70%, 65%)',
-  'hsl(240, 4%, 65%)',
-  'hsl(25, 55%, 78%)',
-  'hsl(240, 3%, 55%)',
-  'hsl(25, 90%, 38%)',
-  'hsl(240, 6%, 72%)',
+  'hsl(255, 100%, 71%)', // violet (brand)
+  'hsl(322, 90%, 63%)',  // fuchsia
+  'hsl(190, 90%, 55%)',  // cyan
+  'hsl(38, 95%, 58%)',   // amber
+  'hsl(152, 65%, 50%)',  // green
+  'hsl(220, 92%, 68%)',  // blue
+  'hsl(2, 85%, 67%)',    // coral
+  'hsl(280, 72%, 70%)',  // light purple
+  'hsl(170, 70%, 48%)',  // teal
+  'hsl(48, 95%, 62%)',   // yellow
+  'hsl(300, 75%, 72%)',  // magenta
+  'hsl(212, 16%, 62%)',  // slate
+  'hsl(255, 62%, 80%)',  // lavender
+  'hsl(340, 82%, 68%)',  // rose
 ];
 
 interface SubscriptionCategoryChartProps {
@@ -81,9 +83,13 @@ export function SubscriptionCategoryChart({ data, formatAmount }: SubscriptionCa
               labelFormatter={(label) => String(label)}
               contentStyle={{
                 borderRadius: '12px',
-                border: '1px solid hsl(240, 5.9%, 90%)',
+                border: '1px solid hsl(250 16% 22%)',
+                background: 'hsl(250 22% 11%)',
+                color: 'hsl(0 0% 98%)',
                 fontSize: '13px',
               }}
+              itemStyle={{ color: 'hsl(0 0% 98%)' }}
+              labelStyle={{ color: 'hsl(252 13% 66%)' }}
             />
           </PieChart>
         </ResponsiveContainer>

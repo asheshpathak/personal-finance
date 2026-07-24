@@ -4,7 +4,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // dvh, not vh: iOS resolves vh against the toolbar-retracted viewport, so
   // min-h-screen leaves ~100px of phantom scroll on every page.
   return (
-    <div className="flex min-h-dvh bg-[#F5F5F5] dark:bg-background">
+    <div className="flex min-h-dvh bg-background">
       <Sidebar />
       {/*
         min-w-0 is load-bearing: a flex child defaults to min-width:auto, so any

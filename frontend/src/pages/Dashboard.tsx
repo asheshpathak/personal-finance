@@ -10,7 +10,6 @@ import { useCurrency } from '@/context/CurrencyContext';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { api } from '@/lib/api';
 import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
-import { CategorySpendChart } from '@/components/CategorySpendChart';
 import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
 import type { ExpenseFormValues } from '@/components/ExpenseForm';
 
@@ -159,6 +158,13 @@ export default function Dashboard() {
 
   const totalExpense = expenses.reduce((acc, curr) => acc + curr.amount, 0);
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
+  })();
+
   // Filtered expenses for the Recent Transactions table
   const filteredExpenses = (() => {
     const days = FILTERS.find(f => f.key === activeFilter)?.days ?? 7;
@@ -222,50 +228,53 @@ export default function Dashboard() {
     <Layout>
       <div className="flex flex-col gap-6 sm:gap-8">
         
-        {/* Header Section */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-2">
-              Total Spent
-              {activeBudget && (
-                <span className="normal-case tracking-normal">
-                  {' · '}
-                  {new Date(activeBudget.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} -{' '}
-                  {new Date(activeBudget.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </span>
-              )}
-            </h2>
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tighter">{formatAmount(totalExpense)}</h1>
+        {/* Hero */}
+        <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-hero p-6 sm:p-8 lg:p-10 animate-fade-up">
+          <div className="flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-foreground/80">{greeting}</p>
+              <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-foreground/50">
+                Total spent
+                {activeBudget && (
+                  <span className="text-foreground/40">
+                    {' · '}
+                    {new Date(activeBudget.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
+                    {new Date(activeBudget.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                )}
+              </p>
+              <h1 className="mt-1.5 text-[2.75rem] leading-none sm:text-6xl font-extrabold tracking-tighter tabular-nums">
+                {formatAmount(totalExpense)}
+              </h1>
             </div>
-          </div>
-          
-          <div className="flex gap-3 flex-shrink-0">
-            {/* Add Expense Dialog */}
-            <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if(!open) resetForm(); }}>
-              <DialogTrigger asChild>
-                <Button className="rounded-xl px-4 sm:px-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm w-full sm:w-auto">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Expense
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl">
-                <DialogHeader>
-                  <DialogTitle>Add New Expense</DialogTitle>
-                </DialogHeader>
-                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAddExpense} submitLabel="Save Expense" />
-              </DialogContent>
-            </Dialog>
-            
-            {/* Edit dialog (opened programmatically) */}
-            <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if(!open) resetForm(); }}>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl">
-                <DialogHeader>
-                  <DialogTitle>Edit Expense</DialogTitle>
-                </DialogHeader>
-                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleEditExpense} submitLabel="Update Expense" />
-              </DialogContent>
-            </Dialog>
+
+            <div className="flex-shrink-0">
+              {/* Add Expense Dialog */}
+              <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if(!open) resetForm(); }}>
+                <DialogTrigger asChild>
+                  <Button size="lg" className="w-full sm:w-auto px-7">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Expense
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Expense</DialogTitle>
+                  </DialogHeader>
+                  <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAddExpense} submitLabel="Save Expense" />
+                </DialogContent>
+              </Dialog>
+
+              {/* Edit dialog (opened programmatically) */}
+              <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if(!open) resetForm(); }}>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Edit Expense</DialogTitle>
+                  </DialogHeader>
+                  <ExpenseForm values={form} onChange={patchForm} onSubmit={handleEditExpense} submitLabel="Update Expense" />
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </div>
 
@@ -280,8 +289,6 @@ export default function Dashboard() {
         )}
 
         {/* Spending by Category */}
-        <CategorySpendChart expenses={expenses} formatAmount={formatAmount} />
-
         {/* Recent Transactions */}
         <div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -367,35 +374,45 @@ export default function Dashboard() {
               <div className="text-center py-10 text-muted-foreground rounded-2xl border bg-card">No expenses in this period.</div>
             ) : (
               filteredExpenses.map((expense) => (
-                <Card key={expense._id} className="rounded-2xl border shadow-sm bg-card p-4">
+                <Card key={expense._id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{expense.description || expense.category}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
                           {expense.category}
                         </span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          {expense.paymentMode === 'Credit Card' ? <CreditCard className="w-3 h-3"/> : 
+                          {expense.paymentMode === 'Credit Card' ? <CreditCard className="w-3 h-3"/> :
                            expense.paymentMode === 'Cash' ? <Banknote className="w-3 h-3"/> : <Landmark className="w-3 h-3" />}
                           {expense.paymentMode}
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <span className="font-bold text-base">{formatAmount(expense.amount)}</span>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-muted-foreground hover:text-foreground" onClick={() => openEditDialog(expense)}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
+                    <span className="font-bold text-lg tabular-nums flex-shrink-0">{formatAmount(expense.amount)}</span>
+                  </div>
+
+                  {/* Full-width, labelled actions — unmistakably tappable with a thumb. */}
+                  <div className="flex gap-2.5 mt-4 pt-3.5 border-t border-white/[0.06]">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-11 gap-2"
+                      onClick={() => openEditDialog(expense)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-11 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/40"
+                      onClick={() => setDeleteId(expense._id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </Button>
                   </div>
                 </Card>
               ))

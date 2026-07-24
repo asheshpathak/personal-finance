@@ -187,7 +187,7 @@ function SubscriptionForm({
         </Select>
       </div>
       <div className="pt-4">
-        <Button type="submit" className="rounded-xl w-full bg-foreground text-background hover:bg-foreground/90">
+        <Button type="submit" className="w-full h-12">
           {submitLabel}
         </Button>
       </div>
@@ -419,7 +419,7 @@ export default function Subscriptions() {
               </div>
             ) : (
               subscriptions.map(sub => (
-                <Card key={sub._id} className="rounded-2xl border shadow-sm bg-card p-4">
+                <Card key={sub._id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{sub.name}</p>
@@ -429,7 +429,7 @@ export default function Subscriptions() {
                           <> · Due {formatDueDate(sub)}</>
                         )}
                       </p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
                           {sub.category}
                         </span>
@@ -438,14 +438,22 @@ export default function Subscriptions() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-muted-foreground hover:text-foreground" onClick={() => openEdit(sub)}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(sub._id)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                  </div>
+
+                  {/* Full-width, labelled actions — unmistakably tappable with a thumb. */}
+                  <div className="flex gap-2.5 mt-4 pt-3.5 border-t border-white/[0.06]">
+                    <Button variant="outline" className="flex-1 h-11 gap-2" onClick={() => openEdit(sub)}>
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-11 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/40"
+                      onClick={() => setDeleteId(sub._id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </Button>
                   </div>
                 </Card>
               ))

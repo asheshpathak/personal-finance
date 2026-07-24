@@ -272,14 +272,14 @@ export default function Expenses() {
               <div className="text-center py-10 text-muted-foreground rounded-2xl border bg-card">No expenses in this period.</div>
             ) : (
               filteredExpenses.map(expense => (
-                <Card key={expense._id} className="rounded-2xl border shadow-sm bg-card p-4">
+                <Card key={expense._id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{expense.description || expense.category}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
                           {expense.category}
                         </span>
@@ -291,17 +291,23 @@ export default function Expenses() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <span className="font-bold text-base">{formatAmount(expense.amount)}</span>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-muted-foreground hover:text-foreground" onClick={() => openEdit(expense)}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-11 w-11 md:h-9 md:w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
+                    <span className="font-bold text-lg tabular-nums flex-shrink-0">{formatAmount(expense.amount)}</span>
+                  </div>
+
+                  {/* Full-width, labelled actions — unmistakably tappable with a thumb. */}
+                  <div className="flex gap-2.5 mt-4 pt-3.5 border-t border-white/[0.06]">
+                    <Button variant="outline" className="flex-1 h-11 gap-2" onClick={() => openEdit(expense)}>
+                      <Pencil className="w-4 h-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-11 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/40"
+                      onClick={() => setDeleteId(expense._id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </Button>
                   </div>
                 </Card>
               ))

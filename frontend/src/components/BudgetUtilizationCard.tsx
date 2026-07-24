@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Target, Calendar, AlertTriangle, AlertCircle, Check } from 'lucide-react';
+import { AlertTriangle, AlertCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCurrency } from '@/context/CurrencyContext';
@@ -24,19 +24,36 @@ export type BudgetSummary = {
   daysLeft: number;
 };
 
+/** Distinct per-category dot/bar hues, tuned for the charcoal canvas. */
+const CATEGORY_COLORS = [
+  'hsl(255, 100%, 71%)', // violet
+  'hsl(322, 90%, 63%)',  // fuchsia
+  'hsl(190, 90%, 55%)',  // cyan
+  'hsl(38, 95%, 58%)',   // amber
+  'hsl(152, 65%, 50%)',  // green
+  'hsl(220, 92%, 68%)',  // blue
+  'hsl(2, 85%, 67%)',    // coral
+  'hsl(280, 72%, 70%)',  // light purple
+  'hsl(170, 70%, 48%)',  // teal
+  'hsl(48, 95%, 62%)',   // yellow
+  'hsl(300, 75%, 72%)',  // magenta
+  'hsl(212, 16%, 62%)',  // slate
+  'hsl(255, 62%, 80%)',  // lavender
+  'hsl(340, 82%, 68%)',  // rose
+];
+
 /**
- * Budget health. Status never rides on color alone — every tier pairs its hue
- * with an icon and a text label so it survives colorblindness and greyscale.
+ * Budget health for the ring + the per-row percentage. Only states that need
+ * attention carry an icon; "on track" is the silent default. The text label is
+ * always present (sr-only where the icon is absent) so status never rides on
+ * color alone.
  */
 type Status = {
   stroke: string;
   trackStroke: string;
-  fill: string;
-  track: string;
   text: string;
-  tile: string;
   label: string;
-  Icon: LucideIcon;
+  Icon: LucideIcon | null;
 };
 
 function getStatus(remaining: number, percentage: number): Status {
@@ -44,10 +61,7 @@ function getStatus(remaining: number, percentage: number): Status {
     return {
       stroke: 'stroke-destructive',
       trackStroke: 'stroke-destructive/20',
-      fill: 'bg-destructive',
-      track: 'bg-destructive/15',
       text: 'text-destructive',
-      tile: 'border-destructive/25 bg-destructive/[0.04] hover:border-destructive/40',
       label: 'Over budget',
       Icon: AlertTriangle,
     };
@@ -56,10 +70,7 @@ function getStatus(remaining: number, percentage: number): Status {
     return {
       stroke: 'stroke-amber-500',
       trackStroke: 'stroke-amber-500/20',
-      fill: 'bg-amber-500',
-      track: 'bg-amber-500/15',
-      text: 'text-amber-600 dark:text-amber-500',
-      tile: 'border-amber-500/25 bg-amber-500/[0.04] hover:border-amber-500/40',
+      text: 'text-amber-500',
       label: 'Nearly spent',
       Icon: AlertCircle,
     };
@@ -67,17 +78,26 @@ function getStatus(remaining: number, percentage: number): Status {
   return {
     stroke: 'stroke-primary',
     trackStroke: 'stroke-primary/20',
-    fill: 'bg-primary',
-    track: 'bg-primary/15',
     text: 'text-muted-foreground',
-    tile: 'border-border bg-muted/20 hover:border-primary/40',
     label: 'On track',
-    Icon: Check,
+    Icon: null,
   };
 }
 
 const RADIUS = 62;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+function Stat({ label, value, sub }: { label: string; value: string; sub?: React.ReactNode }) {
+  return (
+    <div className="min-w-0 px-2 sm:px-6 first:pl-0">
+      <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.08em] sm:tracking-[0.1em] text-muted-foreground truncate">
+        {label}
+      </p>
+      <p className="mt-1.5 text-base sm:text-2xl font-extrabold tracking-tight tabular-nums truncate">{value}</p>
+      {sub && <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground tabular-nums truncate">{sub}</p>}
+    </div>
+  );
+}
 
 export function BudgetUtilizationCard({
   startDate,
@@ -106,14 +126,14 @@ export function BudgetUtilizationCard({
   const dateRange = `${new Date(startDate).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-  })} - ${new Date(endDate).toLocaleDateString('en-US', {
+  })} – ${new Date(endDate).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   })}`;
 
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-muted bg-card shadow-sm">
+    <Card className="relative overflow-hidden">
       {/* Ambient wash — pure decoration, kept behind the content and inert to AT. */}
       <div
         aria-hidden="true"
@@ -123,147 +143,109 @@ export function BudgetUtilizationCard({
         )}
       />
 
-      <CardContent className="relative p-5 sm:p-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-            <Target className="w-5 h-5 text-primary flex-shrink-0" />
-            Active Budget Utilization
-          </h3>
-          <span className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 flex-shrink-0" />
-            {dateRange}
-          </span>
+      <CardContent className="relative p-5 sm:p-7">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-7">
+          <h3 className="text-base sm:text-lg font-bold tracking-tight">Active Budget Utilization</h3>
+          <span className="text-xs sm:text-sm text-muted-foreground tabular-nums">{dateRange}</span>
         </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-8">
-          {/* ── Overall gauge ─────────────────────────────────────────── */}
-          <div className="flex items-center gap-4 sm:gap-5 lg:flex-col lg:gap-4 lg:w-44 lg:flex-shrink-0">
-            <div className="relative flex-shrink-0">
-              {/* Sized in CSS (not width/height attrs) so it scales down on the
-                  smallest screens, giving the numeric column more room. */}
-              <svg viewBox="0 0 148 148" className="-rotate-90 w-28 h-28 sm:w-[148px] sm:h-[148px]">
-                <circle
-                  cx="74"
-                  cy="74"
-                  r={RADIUS}
-                  fill="none"
-                  strokeWidth="11"
-                  className={overall.trackStroke}
-                />
-                <circle
-                  cx="74"
-                  cy="74"
-                  r={RADIUS}
-                  fill="none"
-                  strokeWidth="11"
-                  strokeLinecap="round"
-                  strokeDasharray={CIRCUMFERENCE}
-                  strokeDashoffset={arcOffset}
-                  className={cn(overall.stroke, 'transition-[stroke-dashoffset] duration-1000 ease-out motion-reduce:transition-none')}
-                />
-              </svg>
-
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold tracking-tighter tabular-nums leading-none">
-                  {Math.round(summary.percentage)}
-                  <span className="text-lg align-top">%</span>
-                </span>
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">
-                  used
-                </span>
-              </div>
-            </div>
-
-            <div className="min-w-0 lg:text-center">
-              <div className="text-xl sm:text-2xl font-bold tracking-tighter tabular-nums">
-                {formatAmount(summary.spent)}
-              </div>
-              <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
-                of {formatAmount(summary.allocated)}
-              </div>
-
-              <div
+        {/* ── Summary band — bigger ring + structured stats ──────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-7 sm:gap-9 pb-7 mb-6 border-b border-white/[0.06]">
+          <div className="relative flex-shrink-0 self-center sm:self-auto">
+            <svg viewBox="0 0 148 148" className="-rotate-90 w-40 h-40 sm:w-44 sm:h-44">
+              <circle cx="74" cy="74" r={RADIUS} fill="none" strokeWidth="10" className={overall.trackStroke} />
+              <circle
+                cx="74"
+                cy="74"
+                r={RADIUS}
+                fill="none"
+                strokeWidth="10"
+                strokeLinecap="round"
+                strokeDasharray={CIRCUMFERENCE}
+                strokeDashoffset={arcOffset}
                 className={cn(
-                  'mt-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold',
-                  overall.tile,
-                  overall.text
+                  overall.stroke,
+                  'transition-[stroke-dashoffset] duration-1000 ease-out motion-reduce:transition-none'
                 )}
-              >
-                <overall.Icon className="w-3 h-3" />
-                {overall.label}
-              </div>
-
-              <div className="text-[11px] text-muted-foreground mt-2 tabular-nums leading-relaxed">
-                <div>
-                  {summary.daysLeft === 0
-                    ? 'Period ended'
-                    : `${summary.daysLeft} ${summary.daysLeft === 1 ? 'day' : 'days'} left`}
-                </div>
-                <div>
-                  {summary.remaining < 0
-                    ? `${formatAmount(Math.abs(summary.remaining))} over`
-                    : `${formatAmount(summary.remaining)} remaining`}
-                </div>
-              </div>
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl font-extrabold tracking-tighter tabular-nums leading-none">
+                {Math.round(summary.percentage)}
+                <span className="text-xl align-top">%</span>
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-1">used</span>
             </div>
           </div>
 
-          {/* ── Category tiles ────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 flex-1 min-w-0">
-            {categories.map(cat => {
-              const status = getStatus(cat.remaining, cat.percentage);
-              // Keep a sliver visible for tiny non-zero spend, which would
-              // otherwise round to an invisible bar and read as untouched.
-              const width = cat.spent > 0 ? Math.max(cat.percentage, 3) : 0;
+          <div className="flex-1 grid grid-cols-3 divide-x divide-white/[0.08]">
+            <Stat label="Spent" value={formatAmount(summary.spent)} sub={`of ${formatAmount(summary.allocated)}`} />
+            <Stat
+              label={summary.remaining < 0 ? 'Over by' : 'Remaining'}
+              value={formatAmount(Math.abs(summary.remaining))}
+              sub={
+                <span className={cn('inline-flex items-center gap-1 font-semibold', overall.text)}>
+                  {overall.Icon && <overall.Icon className="w-3 h-3" />}
+                  {overall.label}
+                </span>
+              }
+            />
+            <Stat
+              label="Days Left"
+              value={summary.daysLeft === 0 ? '—' : String(summary.daysLeft)}
+              sub={summary.daysLeft === 0 ? 'Period ended' : 'remaining'}
+            />
+          </div>
+        </div>
 
-              return (
-                <div
-                  key={cat.category}
+        {/* ── Category rows — one clean line each ────────────────────────── */}
+        <div className="divide-y divide-white/[0.05]">
+          {categories.map((cat, i) => {
+            const status = getStatus(cat.remaining, cat.percentage);
+            const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+            // Keep a sliver visible for tiny non-zero spend, which would
+            // otherwise round to an invisible bar and read as untouched.
+            const width = cat.spent > 0 ? Math.max(cat.percentage, 2) : 0;
+
+            return (
+              <div
+                key={cat.category}
+                className="flex items-center gap-3 sm:gap-4 py-3.5"
+                title={`${cat.category}: ${formatAmount(cat.spent)} of ${formatAmount(cat.allocated)}`}
+              >
+                <span
+                  className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: color }}
+                  aria-hidden="true"
+                />
+
+                <span className="w-28 sm:w-52 flex-shrink-0 truncate text-sm font-medium">{cat.category}</span>
+
+                <div className="flex-1 min-w-0 h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
+                    style={{ width: `${revealed ? width : 0}%`, backgroundColor: color }}
+                  />
+                </div>
+
+                <span className="hidden md:block flex-shrink-0 w-36 text-right text-xs text-muted-foreground tabular-nums">
+                  {formatAmount(cat.spent)}
+                  <span className="text-muted-foreground/40"> / {formatAmount(cat.allocated)}</span>
+                </span>
+
+                <span
                   className={cn(
-                    'group rounded-xl border p-3.5 transition-all duration-200 hover:shadow-sm',
-                    status.tile
+                    'flex items-center justify-end gap-1 flex-shrink-0 w-16 text-right text-sm font-bold tabular-nums',
+                    status.text
                   )}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
-                    <span className="text-xs font-semibold text-muted-foreground truncate leading-tight">
-                      {cat.category}
-                    </span>
-                    <span
-                      className={cn(
-                        'flex items-center gap-1 text-[11px] font-bold tabular-nums flex-shrink-0',
-                        status.text
-                      )}
-                    >
-                      <status.Icon className="w-3 h-3" />
-                      <span className="sr-only">{status.label}: </span>
-                      {Math.round(cat.rawPercentage)}%
-                    </span>
-                  </div>
-
-                  <div className="flex items-baseline gap-1.5 mb-2.5">
-                    <span
-                      className={cn(
-                        'text-lg font-bold tracking-tighter tabular-nums leading-none',
-                        cat.remaining < 0 ? status.text : 'text-foreground'
-                      )}
-                    >
-                      {formatAmount(cat.spent)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground tabular-nums truncate">
-                      / {formatAmount(cat.allocated)}
-                    </span>
-                  </div>
-
-                  <div className={cn('h-1.5 w-full rounded-full overflow-hidden', status.track)}>
-                    <div
-                      className={cn('h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none', status.fill)}
-                      style={{ width: `${revealed ? width : 0}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  {status.Icon && <status.Icon className="w-3.5 h-3.5" />}
+                  <span className="sr-only">{status.label}: </span>
+                  {Math.round(cat.rawPercentage)}%
+                </span>
+              </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
