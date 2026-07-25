@@ -10,9 +10,10 @@ import { useCurrency } from '@/context/CurrencyContext';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { api } from '@/lib/api';
 import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
+import { NonBudgetedSpendsCard } from '@/components/NonBudgetedSpendsCard';
 import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
 import type { ExpenseFormValues } from '@/components/ExpenseForm';
-import { computeBudgetUtilization, expensesInPeriod, nonEmptySections, type Budget } from '@/lib/budgetSections';
+import { computeBudgetUtilization, nonEmptySections, type Budget } from '@/lib/budgetSections';
 
 interface Expense {
   _id: string;
@@ -144,12 +145,18 @@ export default function Dashboard() {
     setEditExpenseId(null);
   };
 
+  // Every section of the active budget measured against what's been recorded.
+  const budgetBreakdown = activeBudget ? computeBudgetUtilization(activeBudget, expenses) : null;
+
   // The headline is labelled with the active budget's date range, so it has to
   // be scoped to that range. Summing every expense ever recorded under a "Jul 1
-  // – Jul 31" label made a lifetime total read as one month's spending, and the
-  // figure disagreed with the budget card directly beneath it.
-  const totalExpense = (activeBudget ? expensesInPeriod(activeBudget, expenses) : expenses)
-    .reduce((acc, curr) => acc + curr.amount, 0);
+  // – Jul 31" label made a lifetime total read as one month's spending.
+  //
+  // It comes from the same computation as the two cards below, so the headline
+  // is always exactly budgeted spend + non-budgeted spend.
+  const totalExpense = budgetBreakdown
+    ? budgetBreakdown.totals.periodTotal
+    : expenses.reduce((acc, curr) => acc + curr.amount, 0);
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -166,9 +173,6 @@ export default function Dashboard() {
     cutoff.setHours(0, 0, 0, 0);
     return expenses.filter(e => new Date(e.date) >= cutoff).sort(byRecency);
   })()
-
-  // Every section of the active budget measured against what's been recorded.
-  const budgetBreakdown = activeBudget ? computeBudgetUtilization(activeBudget, expenses) : null;
 
   return (
     <Layout>
@@ -192,6 +196,16 @@ export default function Dashboard() {
               <h1 className="mt-1.5 text-[2.75rem] leading-none sm:text-6xl font-extrabold tracking-tighter tabular-nums">
                 {formatAmount(totalExpense)}
               </h1>
+
+              {/* Says where the headline splits, so it never looks like the
+                  budget card below is under-counting. */}
+              {budgetBreakdown && budgetBreakdown.unbudgeted.total > 0 && (
+                <p className="mt-2.5 text-xs text-foreground/50 tabular-nums">
+                  {formatAmount(budgetBreakdown.totals.spent)} budgeted
+                  <span className="text-foreground/30"> · </span>
+                  {formatAmount(budgetBreakdown.unbudgeted.total)} outside the budget
+                </p>
+              )}
             </div>
 
             <div className="flex-shrink-0">
@@ -226,12 +240,17 @@ export default function Dashboard() {
 
         {/* Active Budget Utilization */}
         {activeBudget && budgetBreakdown && (
-          <BudgetUtilizationCard
-            startDate={activeBudget.startDate}
-            endDate={activeBudget.endDate}
-            sections={nonEmptySections(budgetBreakdown.sections)}
-            totals={budgetBreakdown.totals}
-          />
+          <>
+            <BudgetUtilizationCard
+              startDate={activeBudget.startDate}
+              endDate={activeBudget.endDate}
+              sections={nonEmptySections(budgetBreakdown.sections)}
+              totals={budgetBreakdown.totals}
+            />
+            {/* The rest of the period's spending — what the budget never
+                planned for. Hidden entirely when there is none. */}
+            <NonBudgetedSpendsCard unbudgeted={budgetBreakdown.unbudgeted} budgetId={activeBudget._id} />
+          </>
         )}
 
         {/* Spending by Category */}

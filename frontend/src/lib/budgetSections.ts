@@ -102,6 +102,23 @@ export interface BudgetTotals {
   daysLeft: number;
   /** Income not committed to any section. Negative means over-committed. */
   unallocated: number;
+  /** Budgeted spend plus non-budgeted spend — everything paid in the period. */
+  periodTotal: number;
+}
+
+export interface UnbudgetedCategory {
+  category: string;
+  amount: number;
+  transactions: number;
+  /** Percentage of the non-budgeted total, not of the whole period. */
+  share: number;
+}
+
+/** Spending inside the budget's dates that no allocation covers. */
+export interface UnbudgetedSpend {
+  total: number;
+  transactions: number;
+  categories: UnbudgetedCategory[];
 }
 
 function toItem(category: string, allocated: number, spent: number): UtilizationItem {
@@ -183,7 +200,7 @@ export function expensesInPeriod<T extends { date: string }>(
 export function computeBudgetUtilization(
   budget: Budget,
   expenses: ExpenseLike[]
-): { sections: UtilizationSection[]; totals: BudgetTotals } {
+): { sections: UtilizationSection[]; unbudgeted: UnbudgetedSpend; totals: BudgetTotals } {
   const inPeriod = expensesInPeriod(budget, expenses);
 
   const spentIn = (categoryName: string) =>
@@ -209,8 +226,15 @@ export function computeBudgetUtilization(
 
   // Subscription spending that matched no single line still belongs to the
   // section total — otherwise it would vanish from the budget entirely.
+  //
+  // Only when the budget actually plans subscriptions, though: a budget that
+  // plans none doesn't get to absorb subscription payments into a section with
+  // no rows. That spending is simply outside the plan, and counting it here as
+  // well as there inflated the period total.
   const matchedSubSpend = subscriptionItems.reduce((sum, i) => sum + i.spent, 0);
-  const unmatchedSubSpend = Math.max(0, spentIn(SUBSCRIPTION_CATEGORY) - matchedSubSpend);
+  const unmatchedSubSpend = budgetSubs.length > 0
+    ? Math.max(0, spentIn(SUBSCRIPTION_CATEGORY) - matchedSubSpend)
+    : 0;
 
   const sections: UtilizationSection[] = [
     rollUp(expenseAllocations.map(c => toItem(c.name, c.allocatedAmount, spentIn(c.name))), 'expenses'),
@@ -225,6 +249,39 @@ export function computeBudgetUtilization(
     section.items.sort((a, b) => b.spent - a.spent || b.allocated - a.allocated);
   }
 
+  // Anything paid inside the period that no budget line covers. It isn't part
+  // of utilization — you can't use an allocation that doesn't exist — but it is
+  // real money, so it gets reported rather than dropped.
+  const budgeted = new Set<string>([
+    ...expenseAllocations.map(c => c.name),
+    ...(budget.investments ?? []).map(c => c.name),
+    ...(budget.savings ?? []).map(c => c.name),
+  ]);
+  if (budgetSubs.length > 0) budgeted.add(SUBSCRIPTION_CATEGORY);
+
+  const unbudgetedExpenses = inPeriod.filter(e => !budgeted.has(e.category));
+  const byCategory = new Map<string, { amount: number; transactions: number }>();
+  for (const e of unbudgetedExpenses) {
+    const entry = byCategory.get(e.category) ?? { amount: 0, transactions: 0 };
+    entry.amount += e.amount;
+    entry.transactions += 1;
+    byCategory.set(e.category, entry);
+  }
+  const unbudgetedTotal = unbudgetedExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const unbudgeted: UnbudgetedSpend = {
+    total: unbudgetedTotal,
+    transactions: unbudgetedExpenses.length,
+    categories: [...byCategory.entries()]
+      .map(([category, entry]) => ({
+        category,
+        amount: entry.amount,
+        transactions: entry.transactions,
+        share: unbudgetedTotal > 0 ? (entry.amount / unbudgetedTotal) * 100 : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount),
+  };
+
   const allocated = sections.reduce((sum, s) => sum + s.allocated, 0);
   const spent = sections.reduce((sum, s) => sum + s.spent, 0);
   const income = budget.income ?? 0;
@@ -234,6 +291,7 @@ export function computeBudgetUtilization(
 
   return {
     sections,
+    unbudgeted,
     totals: {
       income,
       allocated,
@@ -243,6 +301,9 @@ export function computeBudgetUtilization(
       rawPercentage: allocated > 0 ? (spent / allocated) * 100 : 0,
       daysLeft: msLeft > 0 ? Math.ceil(msLeft / 86_400_000) : 0,
       unallocated: income - allocated,
+      // Everything paid in the period: what the budget planned for, plus what
+      // it didn't. This is the figure the dashboard headline shows.
+      periodTotal: spent + unbudgeted.total,
     },
   };
 }
