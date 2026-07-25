@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import Expenses from './pages/Expenses';
 import Budgets from './pages/Budgets';
 import BudgetFormPage from './pages/BudgetFormPage';
+import BudgetViewPage from './pages/BudgetViewPage';
 import Subscriptions from './pages/Subscriptions';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
@@ -31,9 +32,15 @@ function App() {
           path="/budgets/new" 
           element={isAuthenticated ? <BudgetFormPage /> : <Navigate to="/login" />} 
         />
-        <Route 
-          path="/budgets/:id/edit" 
-          element={isAuthenticated ? <BudgetFormPage /> : <Navigate to="/login" />} 
+        <Route
+          path="/budgets/:id/edit"
+          element={isAuthenticated ? <BudgetFormPage /> : <Navigate to="/login" />}
+        />
+        {/* Declared after /budgets/new and /budgets/:id/edit so those keep
+            matching first — this is the read-only view. */}
+        <Route
+          path="/budgets/:id"
+          element={isAuthenticated ? <BudgetViewPage /> : <Navigate to="/login" />}
         />
         <Route 
           path="/budgets" 

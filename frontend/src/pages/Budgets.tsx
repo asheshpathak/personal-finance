@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Trash2, Calendar, CheckCircle2, Circle, Pencil } from 'lucide-react';
+import { Plus, Trash2, Calendar, CheckCircle2, Circle, Pencil, Eye } from 'lucide-react';
 import { useCurrency } from '@/context/CurrencyContext';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { api } from '@/lib/api';
@@ -92,7 +92,12 @@ export default function Budgets() {
                           {budget.isActive ? <span className="text-primary">Active</span> : <span className="text-muted-foreground">Inactive</span>}
                         </div>
                       </div>
-                      <div className="flex gap-2 -mt-2 -mr-2 flex-shrink-0">
+                      <div className="flex gap-1 -mt-2 -mr-2 flex-shrink-0">
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted" asChild>
+                          <Link to={`/budgets/${budget._id}`} aria-label="View budget">
+                            <Eye className="w-4 h-4" />
+                          </Link>
+                        </Button>
                         <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted" asChild>
                           <Link to={`/budgets/${budget._id}/edit`} aria-label="Edit budget">
                             <Pencil className="w-4 h-4" />
