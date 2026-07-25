@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
 import { NonBudgetedSpendsCard } from '@/components/NonBudgetedSpendsCard';
 import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
 import type { ExpenseFormValues } from '@/components/ExpenseForm';
-import { computeBudgetUtilization, nonEmptySections, type Budget } from '@/lib/budgetSections';
+import { computeBudgetUtilization, expensesInPeriod, nonEmptySections, type Budget } from '@/lib/budgetSections';
 
 interface Expense {
   _id: string;
@@ -158,6 +159,17 @@ export default function Dashboard() {
     ? budgetBreakdown.totals.periodTotal
     : expenses.reduce((acc, curr) => acc + curr.amount, 0);
 
+  // Spending recorded before the budget started or after it ended. The headline
+  // can't count it without contradicting its own date label, but dropping it
+  // silently makes money look lost — so it gets named, with a way to go see it.
+  const outsideBudget = (() => {
+    if (!activeBudget) return null;
+    const inPeriod = expensesInPeriod(activeBudget, expenses);
+    const count = expenses.length - inPeriod.length;
+    if (count === 0) return null;
+    return { count, total: expenses.reduce((sum, e) => sum + e.amount, 0) - totalExpense };
+  })();
+
   const greeting = (() => {
     const h = new Date().getHours();
     if (h < 12) return 'Good morning';
@@ -203,7 +215,19 @@ export default function Dashboard() {
                 <p className="mt-2.5 text-xs text-foreground/50 tabular-nums">
                   {formatAmount(budgetBreakdown.totals.spent)} budgeted
                   <span className="text-foreground/30"> · </span>
-                  {formatAmount(budgetBreakdown.unbudgeted.total)} outside the budget
+                  {formatAmount(budgetBreakdown.unbudgeted.total)} not budgeted for
+                </p>
+              )}
+
+              {outsideBudget && (
+                <p className="mt-1.5 text-xs text-foreground/40">
+                  <span className="tabular-nums">{formatAmount(outsideBudget.total)}</span> across{' '}
+                  <span className="tabular-nums">{outsideBudget.count}</span>{' '}
+                  {outsideBudget.count === 1 ? 'payment falls' : 'payments fall'} outside these dates
+                  <span className="text-foreground/25"> · </span>
+                  <Link to="/expenses" className="underline underline-offset-2 hover:text-foreground/70 transition-colors">
+                    see all expenses
+                  </Link>
                 </p>
               )}
             </div>
