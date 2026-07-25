@@ -12,7 +12,7 @@ import { api } from '@/lib/api';
 import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
 import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
 import type { ExpenseFormValues } from '@/components/ExpenseForm';
-import { computeBudgetUtilization, nonEmptySections, type Budget } from '@/lib/budgetSections';
+import { computeBudgetUtilization, expensesInPeriod, nonEmptySections, type Budget } from '@/lib/budgetSections';
 
 interface Expense {
   _id: string;
@@ -144,7 +144,12 @@ export default function Dashboard() {
     setEditExpenseId(null);
   };
 
-  const totalExpense = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+  // The headline is labelled with the active budget's date range, so it has to
+  // be scoped to that range. Summing every expense ever recorded under a "Jul 1
+  // – Jul 31" label made a lifetime total read as one month's spending, and the
+  // figure disagreed with the budget card directly beneath it.
+  const totalExpense = (activeBudget ? expensesInPeriod(activeBudget, expenses) : expenses)
+    .reduce((acc, curr) => acc + curr.amount, 0);
 
   const greeting = (() => {
     const h = new Date().getHours();

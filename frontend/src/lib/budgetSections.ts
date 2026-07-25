@@ -135,6 +135,45 @@ function rollUp(items: UtilizationItem[], key: SectionKey, extraSpent = 0): Util
 
 const normalize = (value: string | undefined) => (value ?? '').trim().toLowerCase();
 
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * Period membership is decided on calendar days, not instants, because the two
+ * kinds of date in this app are written differently:
+ *
+ * - a budget bound comes from a `YYYY-MM-DD` input, so it is stored at UTC
+ *   midnight and its UTC day is the day that was picked;
+ * - an expense is stored at *local* noon, so its local day is the day that was
+ *   picked.
+ *
+ * Comparing the raw instants instead dropped the whole last day of a budget for
+ * any reader west of UTC.
+ */
+const budgetBoundDay = (value: string) => new Date(value).toISOString().slice(0, 10);
+
+const expenseDay = (value: string) => {
+  const d = new Date(value);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+/**
+ * Every expense inside a budget's period — budgeted for or not.
+ *
+ * This is the one definition of "in this budget's period"; utilization and the
+ * dashboard headline both use it so they can't drift apart.
+ */
+export function expensesInPeriod<T extends { date: string }>(
+  budget: { startDate: string; endDate: string },
+  expenses: T[]
+): T[] {
+  const from = budgetBoundDay(budget.startDate);
+  const to = budgetBoundDay(budget.endDate);
+  return expenses.filter(e => {
+    const day = expenseDay(e.date);
+    return day >= from && day <= to;
+  });
+}
+
 /**
  * Splits a budget into its sections and measures each one against real spending.
  *
@@ -145,12 +184,7 @@ export function computeBudgetUtilization(
   budget: Budget,
   expenses: ExpenseLike[]
 ): { sections: UtilizationSection[]; totals: BudgetTotals } {
-  const start = new Date(budget.startDate).getTime();
-  const end = new Date(budget.endDate).setHours(23, 59, 59, 999);
-  const inPeriod = expenses.filter(e => {
-    const at = new Date(e.date).getTime();
-    return at >= start && at <= end;
-  });
+  const inPeriod = expensesInPeriod(budget, expenses);
 
   const spentIn = (categoryName: string) =>
     inPeriod.filter(e => e.category === categoryName).reduce((sum, e) => sum + e.amount, 0);
@@ -194,7 +228,9 @@ export function computeBudgetUtilization(
   const allocated = sections.reduce((sum, s) => sum + s.allocated, 0);
   const spent = sections.reduce((sum, s) => sum + s.spent, 0);
   const income = budget.income ?? 0;
-  const msLeft = end - Date.now();
+  // Counted to the end of the budget's last calendar day, in the reader's own
+  // timezone — "2 days left" has to mean the same thing wherever it's read.
+  const msLeft = new Date(`${budgetBoundDay(budget.endDate)}T23:59:59.999`).getTime() - Date.now();
 
   return {
     sections,

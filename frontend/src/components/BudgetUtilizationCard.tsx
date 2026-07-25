@@ -63,6 +63,43 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: React
   );
 }
 
+/** Distinct per-category dot/bar hues, tuned for the charcoal canvas. */
+const CATEGORY_COLORS = [
+  'hsl(255, 100%, 71%)', // violet
+  'hsl(322, 90%, 63%)',  // fuchsia
+  'hsl(190, 90%, 55%)',  // cyan
+  'hsl(38, 95%, 58%)',   // amber
+  'hsl(152, 65%, 50%)',  // green
+  'hsl(220, 92%, 68%)',  // blue
+  'hsl(2, 85%, 67%)',    // coral
+  'hsl(280, 72%, 70%)',  // light purple
+  'hsl(170, 70%, 48%)',  // teal
+  'hsl(48, 95%, 62%)',   // yellow
+  'hsl(300, 75%, 72%)',  // magenta
+  'hsl(212, 16%, 62%)',  // slate
+  'hsl(255, 62%, 80%)',  // lavender
+  'hsl(340, 82%, 68%)',  // rose
+];
+
+/**
+ * A category keeps its hue for as long as it's in the budget.
+ *
+ * Assignment is by name within the section rather than by spend rank, so a
+ * category doesn't change colour the moment a payment reorders the rows.
+ */
+function buildColorMap(sections: UtilizationSection[]): Map<string, string> {
+  const map = new Map<string, string>();
+  let slot = 0;
+  for (const section of sections) {
+    for (const item of [...section.items].sort((a, b) => a.category.localeCompare(b.category))) {
+      if (map.has(item.category)) continue;
+      map.set(item.category, CATEGORY_COLORS[slot % CATEGORY_COLORS.length]);
+      slot += 1;
+    }
+  }
+  return map;
+}
+
 /** One planned line inside a section. */
 function ItemRow({
   item,
@@ -82,12 +119,18 @@ function ItemRow({
 
   return (
     <div
-      className="flex items-center gap-3 sm:gap-4 py-2.5"
+      className="flex items-center gap-3 sm:gap-4 py-3.5"
       title={`${item.category}: ${formatAmount(item.spent)} of ${formatAmount(item.allocated)}`}
     >
-      <span className="w-24 sm:w-44 flex-shrink-0 truncate text-sm">{item.category}</span>
+      <span
+        className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+        style={{ backgroundColor: color }}
+        aria-hidden="true"
+      />
 
-      <div className="flex-1 min-w-0 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+      <span className="w-28 sm:w-52 flex-shrink-0 truncate text-sm font-medium">{item.category}</span>
+
+      <div className="flex-1 min-w-0 h-2 rounded-full bg-white/[0.06] overflow-hidden">
         <div
           className="h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
           style={{ width: `${revealed ? width : 0}%`, backgroundColor: color }}
@@ -101,7 +144,7 @@ function ItemRow({
 
       <span
         className={cn(
-          'flex items-center justify-end gap-1 flex-shrink-0 w-16 text-right text-sm font-semibold tabular-nums',
+          'flex items-center justify-end gap-1 flex-shrink-0 w-16 text-right text-sm font-bold tabular-nums',
           status.text
         )}
       >
@@ -135,6 +178,7 @@ export function BudgetUtilizationCard({
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  const colorMap = buildColorMap(sections);
   const overall = getStatus(totals.remaining, totals.percentage);
   const arcOffset = CIRCUMFERENCE * (1 - (revealed ? totals.percentage : 0) / 100);
 
@@ -213,49 +257,40 @@ export function BudgetUtilizationCard({
           </div>
         </div>
 
-        {/* ── Sections — spending, investments, savings, subscriptions ───── */}
-        <div className="space-y-6">
+        {/* ── Sections — spending, investments, savings, subscriptions ─────
+            Only a quiet header separates them; the category rows below are
+            unchanged, so the card still reads the way it always has. */}
+        <div className="space-y-5">
           {sections.map(section => {
             const status = getStatus(section.remaining, section.percentage);
-            const width = section.spent > 0 ? Math.max(section.percentage, 2) : 0;
 
             return (
               <div key={section.key}>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: section.color }}
-                      aria-hidden="true"
-                    />
-                    <span className="text-sm font-bold tracking-tight truncate">{section.label}</span>
-                  </span>
-                  <span className="flex items-center gap-2 flex-shrink-0 text-xs tabular-nums">
-                    <span className="text-muted-foreground">
-                      {formatAmount(section.spent)}
-                      <span className="text-muted-foreground/40"> / {formatAmount(section.allocated)}</span>
+                {/* A single-section budget needs no heading — that's the card. */}
+                {sections.length > 1 && (
+                  <div className="flex items-baseline justify-between gap-3 pb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground truncate">
+                      {section.label}
                     </span>
-                    <span className={cn('font-bold w-12 text-right', status.text)}>
-                      {status.Icon && <status.Icon className="inline w-3.5 h-3.5 mr-0.5 -mt-0.5" />}
-                      <span className="sr-only">{status.label}: </span>
-                      {Math.round(section.rawPercentage)}%
+                    <span className="flex items-baseline gap-2 flex-shrink-0 text-xs tabular-nums">
+                      <span className="text-muted-foreground">
+                        {formatAmount(section.spent)}
+                        <span className="text-muted-foreground/40"> / {formatAmount(section.allocated)}</span>
+                      </span>
+                      <span className={cn('font-bold w-10 text-right', status.text)}>
+                        <span className="sr-only">{status.label}: </span>
+                        {Math.round(section.rawPercentage)}%
+                      </span>
                     </span>
-                  </span>
-                </div>
+                  </div>
+                )}
 
-                <div className="mt-2 h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
-                    style={{ width: `${revealed ? width : 0}%`, backgroundColor: section.color }}
-                  />
-                </div>
-
-                <div className="mt-1 divide-y divide-white/[0.05] pl-[1.125rem]">
+                <div className="divide-y divide-white/[0.05]">
                   {section.items.map(item => (
                     <ItemRow
                       key={item.category}
                       item={item}
-                      color={section.color}
+                      color={colorMap.get(item.category) ?? CATEGORY_COLORS[0]}
                       revealed={revealed}
                       formatAmount={formatAmount}
                     />
