@@ -7,20 +7,7 @@ import { Plus, Trash2, Calendar, CheckCircle2, Circle, Pencil } from 'lucide-rea
 import { useCurrency } from '@/context/CurrencyContext';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { api } from '@/lib/api';
-
-interface CategoryAllocation {
-  name: string;
-  allocatedAmount: number;
-  _id?: string;
-}
-
-interface Budget {
-  _id: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  categories: CategoryAllocation[];
-}
+import { computeBudgetUtilization, nonEmptySections, type Budget } from '@/lib/budgetSections';
 
 export default function Budgets() {
   const { formatAmount } = useCurrency();
@@ -65,7 +52,9 @@ export default function Budgets() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">Budget Planning</h1>
-            <p className="text-muted-foreground mt-1">Manage and allocate your spending limits.</p>
+            <p className="text-muted-foreground mt-1">
+              Spending, investments, savings and subscriptions — planned section by section.
+            </p>
           </div>
           <Button className="rounded-xl px-4 sm:px-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm w-full sm:w-auto" asChild>
             <Link to="/budgets/new">
@@ -75,14 +64,17 @@ export default function Budgets() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {budgets.length === 0 ? (
             <div className="col-span-full py-12 text-center text-muted-foreground">
               No budgets found. Create one to start planning!
             </div>
           ) : (
-            budgets.map((budget) => {
-              const totalAllocated = budget.categories.reduce((acc, curr) => acc + curr.allocatedAmount, 0);
+            budgets.map(budget => {
+              // No expenses passed: this page plans, the dashboard tracks.
+              const { sections, totals } = computeBudgetUtilization(budget, []);
+              const funded = nonEmptySections(sections);
+
               return (
                 <Card key={budget._id} className={`rounded-2xl border-2 transition-all ${budget.isActive ? 'border-primary/50 shadow-md bg-primary/5' : 'border-border'}`}>
                   <CardHeader className="pb-4 border-b">
@@ -102,29 +94,70 @@ export default function Budgets() {
                       </div>
                       <div className="flex gap-2 -mt-2 -mr-2 flex-shrink-0">
                         <Button variant="ghost" size="icon" className="text-muted-foreground hover:bg-muted" asChild>
-                          <Link to={`/budgets/${budget._id}/edit`}>
+                          <Link to={`/budgets/${budget._id}/edit`} aria-label="Edit budget">
                             <Pencil className="w-4 h-4" />
                           </Link>
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(budget._id)}>
+                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(budget._id)} aria-label="Delete budget">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
                   </CardHeader>
+
                   <CardContent className="pt-4 pb-6">
                     <div className="mb-4">
                       <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Allocated</span>
-                      <div className="text-2xl sm:text-3xl font-bold tracking-tighter mt-1">{formatAmount(totalAllocated)}</div>
+                      <div className="text-2xl sm:text-3xl font-bold tracking-tighter mt-1">{formatAmount(totals.allocated)}</div>
                     </div>
+
+                    {/* How the plan splits across sections, at a glance. */}
+                    {totals.allocated > 0 && (
+                      <div className="flex h-2 w-full overflow-hidden rounded-full bg-white/[0.06] mb-4" aria-hidden="true">
+                        {funded.map(section => (
+                          <div
+                            key={section.key}
+                            style={{
+                              width: `${(section.allocated / totals.allocated) * 100}%`,
+                              backgroundColor: section.color,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+
                     <div className="space-y-3">
-                      {budget.categories.map((cat, i) => (
-                        <div key={i} className="flex justify-between items-center text-sm">
-                          <span className="font-medium text-muted-foreground">{cat.name}</span>
-                          <span className="font-semibold">{formatAmount(cat.allocatedAmount)}</span>
-                        </div>
-                      ))}
+                      {funded.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nothing allocated yet.</p>
+                      ) : (
+                        funded.map(section => (
+                          <div key={section.key}>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="flex items-center gap-2 font-medium">
+                                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: section.color }} aria-hidden="true" />
+                                {section.label}
+                              </span>
+                              <span className="font-semibold tabular-nums">{formatAmount(section.allocated)}</span>
+                            </div>
+                            <p className="mt-0.5 pl-[1.125rem] text-xs text-muted-foreground truncate">
+                              {section.items.map(i => i.category).join(', ')}
+                            </p>
+                          </div>
+                        ))
+                      )}
                     </div>
+
+                    {totals.income > 0 && (
+                      <div className="mt-4 pt-3 border-t border-white/10 flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">
+                          {totals.unallocated < 0 ? 'Over income by' : 'Unallocated'}
+                        </span>
+                        <span className={`font-semibold tabular-nums ${totals.unallocated < 0 ? 'text-destructive' : ''}`}>
+                          {formatAmount(Math.abs(totals.unallocated))}
+                        </span>
+                      </div>
+                    )}
+
                     {!budget.isActive && (
                       <Button variant="outline" className="w-full mt-6 rounded-xl" onClick={() => handleSetActive(budget._id, budget)}>
                         Set as Active
@@ -142,7 +175,7 @@ export default function Budgets() {
         open={deleteId !== null}
         onOpenChange={open => { if (!open) setDeleteId(null); }}
         title="Delete budget?"
-        description="This budget and all its category allocations will be permanently removed."
+        description="This budget and all its allocations will be permanently removed."
         onConfirm={confirmDeleteBudget}
       />
     </Layout>

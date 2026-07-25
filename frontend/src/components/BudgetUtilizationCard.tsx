@@ -4,43 +4,7 @@ import { AlertTriangle, AlertCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCurrency } from '@/context/CurrencyContext';
-
-export type CategoryUtilization = {
-  category: string;
-  allocated: number;
-  spent: number;
-  remaining: number;
-  /** Capped at 100 — drives bar and arc geometry. */
-  percentage: number;
-  /** Uncapped — what gets displayed, so 140% doesn't read as 100%. */
-  rawPercentage: number;
-};
-
-export type BudgetSummary = {
-  allocated: number;
-  spent: number;
-  remaining: number;
-  percentage: number;
-  daysLeft: number;
-};
-
-/** Distinct per-category dot/bar hues, tuned for the charcoal canvas. */
-const CATEGORY_COLORS = [
-  'hsl(255, 100%, 71%)', // violet
-  'hsl(322, 90%, 63%)',  // fuchsia
-  'hsl(190, 90%, 55%)',  // cyan
-  'hsl(38, 95%, 58%)',   // amber
-  'hsl(152, 65%, 50%)',  // green
-  'hsl(220, 92%, 68%)',  // blue
-  'hsl(2, 85%, 67%)',    // coral
-  'hsl(280, 72%, 70%)',  // light purple
-  'hsl(170, 70%, 48%)',  // teal
-  'hsl(48, 95%, 62%)',   // yellow
-  'hsl(300, 75%, 72%)',  // magenta
-  'hsl(212, 16%, 62%)',  // slate
-  'hsl(255, 62%, 80%)',  // lavender
-  'hsl(340, 82%, 68%)',  // rose
-];
+import type { BudgetTotals, UtilizationItem, UtilizationSection } from '@/lib/budgetSections';
 
 /**
  * Budget health for the ring + the per-row percentage. Only states that need
@@ -99,16 +63,67 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: React
   );
 }
 
+/** One planned line inside a section. */
+function ItemRow({
+  item,
+  color,
+  revealed,
+  formatAmount,
+}: {
+  item: UtilizationItem;
+  color: string;
+  revealed: boolean;
+  formatAmount: (value: number) => string;
+}) {
+  const status = getStatus(item.remaining, item.percentage);
+  // Keep a sliver visible for tiny non-zero spend, which would otherwise round
+  // to an invisible bar and read as untouched.
+  const width = item.spent > 0 ? Math.max(item.percentage, 2) : 0;
+
+  return (
+    <div
+      className="flex items-center gap-3 sm:gap-4 py-2.5"
+      title={`${item.category}: ${formatAmount(item.spent)} of ${formatAmount(item.allocated)}`}
+    >
+      <span className="w-24 sm:w-44 flex-shrink-0 truncate text-sm">{item.category}</span>
+
+      <div className="flex-1 min-w-0 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+        <div
+          className="h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
+          style={{ width: `${revealed ? width : 0}%`, backgroundColor: color }}
+        />
+      </div>
+
+      <span className="hidden md:block flex-shrink-0 w-36 text-right text-xs text-muted-foreground tabular-nums">
+        {formatAmount(item.spent)}
+        <span className="text-muted-foreground/40"> / {formatAmount(item.allocated)}</span>
+      </span>
+
+      <span
+        className={cn(
+          'flex items-center justify-end gap-1 flex-shrink-0 w-16 text-right text-sm font-semibold tabular-nums',
+          status.text
+        )}
+      >
+        {status.Icon && <status.Icon className="w-3.5 h-3.5" />}
+        <span className="sr-only">{status.label}: </span>
+        {Math.round(item.rawPercentage)}%
+      </span>
+    </div>
+  );
+}
+
 export function BudgetUtilizationCard({
   startDate,
   endDate,
-  categories,
-  summary,
+  sections,
+  totals,
 }: {
   startDate: string;
   endDate: string;
-  categories: CategoryUtilization[];
-  summary: BudgetSummary;
+  /** Already filtered to the sections worth showing. */
+  sections: UtilizationSection[];
+  totals: BudgetTotals;
 }) {
   const { formatAmount } = useCurrency();
 
@@ -120,8 +135,8 @@ export function BudgetUtilizationCard({
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  const overall = getStatus(summary.remaining, summary.percentage);
-  const arcOffset = CIRCUMFERENCE * (1 - (revealed ? summary.percentage : 0) / 100);
+  const overall = getStatus(totals.remaining, totals.percentage);
+  const arcOffset = CIRCUMFERENCE * (1 - (revealed ? totals.percentage : 0) / 100);
 
   const dateRange = `${new Date(startDate).toLocaleDateString('en-US', {
     month: 'short',
@@ -139,7 +154,7 @@ export function BudgetUtilizationCard({
         aria-hidden="true"
         className={cn(
           'pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full blur-3xl opacity-60',
-          summary.remaining < 0 ? 'bg-destructive/10' : 'bg-primary/10'
+          totals.remaining < 0 ? 'bg-destructive/10' : 'bg-primary/10'
         )}
       />
 
@@ -171,7 +186,7 @@ export function BudgetUtilizationCard({
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <span className="text-4xl font-extrabold tracking-tighter tabular-nums leading-none">
-                {Math.round(summary.percentage)}
+                {Math.round(totals.rawPercentage)}
                 <span className="text-xl align-top">%</span>
               </span>
               <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mt-1">used</span>
@@ -179,10 +194,10 @@ export function BudgetUtilizationCard({
           </div>
 
           <div className="flex-1 grid grid-cols-3 divide-x divide-white/[0.08]">
-            <Stat label="Spent" value={formatAmount(summary.spent)} sub={`of ${formatAmount(summary.allocated)}`} />
+            <Stat label="Spent" value={formatAmount(totals.spent)} sub={`of ${formatAmount(totals.allocated)}`} />
             <Stat
-              label={summary.remaining < 0 ? 'Over by' : 'Remaining'}
-              value={formatAmount(Math.abs(summary.remaining))}
+              label={totals.remaining < 0 ? 'Over by' : 'Remaining'}
+              value={formatAmount(Math.abs(totals.remaining))}
               sub={
                 <span className={cn('inline-flex items-center gap-1 font-semibold', overall.text)}>
                   {overall.Icon && <overall.Icon className="w-3 h-3" />}
@@ -192,61 +207,76 @@ export function BudgetUtilizationCard({
             />
             <Stat
               label="Days Left"
-              value={summary.daysLeft === 0 ? '—' : String(summary.daysLeft)}
-              sub={summary.daysLeft === 0 ? 'Period ended' : 'remaining'}
+              value={totals.daysLeft === 0 ? '—' : String(totals.daysLeft)}
+              sub={totals.daysLeft === 0 ? 'Period ended' : 'remaining'}
             />
           </div>
         </div>
 
-        {/* ── Category rows — one clean line each ────────────────────────── */}
-        <div className="divide-y divide-white/[0.05]">
-          {categories.map((cat, i) => {
-            const status = getStatus(cat.remaining, cat.percentage);
-            const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
-            // Keep a sliver visible for tiny non-zero spend, which would
-            // otherwise round to an invisible bar and read as untouched.
-            const width = cat.spent > 0 ? Math.max(cat.percentage, 2) : 0;
+        {/* ── Sections — spending, investments, savings, subscriptions ───── */}
+        <div className="space-y-6">
+          {sections.map(section => {
+            const status = getStatus(section.remaining, section.percentage);
+            const width = section.spent > 0 ? Math.max(section.percentage, 2) : 0;
 
             return (
-              <div
-                key={cat.category}
-                className="flex items-center gap-3 sm:gap-4 py-3.5"
-                title={`${cat.category}: ${formatAmount(cat.spent)} of ${formatAmount(cat.allocated)}`}
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: color }}
-                  aria-hidden="true"
-                />
+              <div key={section.key}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: section.color }}
+                      aria-hidden="true"
+                    />
+                    <span className="text-sm font-bold tracking-tight truncate">{section.label}</span>
+                  </span>
+                  <span className="flex items-center gap-2 flex-shrink-0 text-xs tabular-nums">
+                    <span className="text-muted-foreground">
+                      {formatAmount(section.spent)}
+                      <span className="text-muted-foreground/40"> / {formatAmount(section.allocated)}</span>
+                    </span>
+                    <span className={cn('font-bold w-12 text-right', status.text)}>
+                      {status.Icon && <status.Icon className="inline w-3.5 h-3.5 mr-0.5 -mt-0.5" />}
+                      <span className="sr-only">{status.label}: </span>
+                      {Math.round(section.rawPercentage)}%
+                    </span>
+                  </span>
+                </div>
 
-                <span className="w-28 sm:w-52 flex-shrink-0 truncate text-sm font-medium">{cat.category}</span>
-
-                <div className="flex-1 min-w-0 h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="mt-2 h-2 w-full rounded-full bg-white/[0.06] overflow-hidden">
                   <div
                     className="h-full rounded-full transition-[width] duration-1000 ease-out motion-reduce:transition-none"
-                    style={{ width: `${revealed ? width : 0}%`, backgroundColor: color }}
+                    style={{ width: `${revealed ? width : 0}%`, backgroundColor: section.color }}
                   />
                 </div>
 
-                <span className="hidden md:block flex-shrink-0 w-36 text-right text-xs text-muted-foreground tabular-nums">
-                  {formatAmount(cat.spent)}
-                  <span className="text-muted-foreground/40"> / {formatAmount(cat.allocated)}</span>
-                </span>
-
-                <span
-                  className={cn(
-                    'flex items-center justify-end gap-1 flex-shrink-0 w-16 text-right text-sm font-bold tabular-nums',
-                    status.text
-                  )}
-                >
-                  {status.Icon && <status.Icon className="w-3.5 h-3.5" />}
-                  <span className="sr-only">{status.label}: </span>
-                  {Math.round(cat.rawPercentage)}%
-                </span>
+                <div className="mt-1 divide-y divide-white/[0.05] pl-[1.125rem]">
+                  {section.items.map(item => (
+                    <ItemRow
+                      key={item.category}
+                      item={item}
+                      color={section.color}
+                      revealed={revealed}
+                      formatAmount={formatAmount}
+                    />
+                  ))}
+                </div>
               </div>
             );
           })}
         </div>
+
+        {totals.income > 0 && (
+          <div className="mt-6 pt-4 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">
+              Income {formatAmount(totals.income)} · allocated {formatAmount(totals.allocated)}
+            </span>
+            <span className={cn('font-semibold tabular-nums', totals.unallocated < 0 && 'text-destructive')}>
+              {totals.unallocated < 0 ? 'Over income by ' : 'Unallocated '}
+              {formatAmount(Math.abs(totals.unallocated))}
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

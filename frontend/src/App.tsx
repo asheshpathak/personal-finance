@@ -5,6 +5,7 @@ import Expenses from './pages/Expenses';
 import Budgets from './pages/Budgets';
 import BudgetFormPage from './pages/BudgetFormPage';
 import Subscriptions from './pages/Subscriptions';
+import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { CurrencyProvider } from './context/CurrencyContext';
@@ -13,7 +14,9 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
 
   return (
-    <CurrencyProvider>
+    // Keyed on auth so signing in remounts the provider, which re-reads the
+    // currency for the account that just logged in.
+    <CurrencyProvider key={String(isAuthenticated)}>
     <BrowserRouter>
       <Routes>
         <Route 
@@ -36,9 +39,13 @@ function App() {
           path="/budgets" 
           element={isAuthenticated ? <Budgets /> : <Navigate to="/login" />} 
         />
-        <Route 
-          path="/subscriptions" 
-          element={isAuthenticated ? <Subscriptions /> : <Navigate to="/login" />} 
+        <Route
+          path="/subscriptions"
+          element={isAuthenticated ? <Subscriptions /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/analytics"
+          element={isAuthenticated ? <Analytics /> : <Navigate to="/login" />}
         />
         <Route 
           path="/settings" 

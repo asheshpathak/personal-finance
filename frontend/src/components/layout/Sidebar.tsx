@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, PieChart, Wallet, Settings, LogOut, Briefcase, ReceiptText, Repeat, Menu, X } from 'lucide-react';
+import { Home, PieChart, Settings, LogOut, Briefcase, ReceiptText, Repeat, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { lockBodyScroll } from '@/lib/bodyScrollLock';
+import { clearCachedCurrency } from '@/lib/currencyCache';
 
 const navItems = [
   { name: 'Dashboard', icon: Home, path: '/' },
@@ -11,7 +12,6 @@ const navItems = [
   { name: 'Subscriptions', icon: Repeat, path: '/subscriptions' },
   { name: 'Analytics', icon: PieChart, path: '/analytics' },
   { name: 'Budgets', icon: Briefcase, path: '/budgets' },
-  { name: 'Wallet', icon: Wallet, path: '/wallet' },
   { name: 'Settings', icon: Settings, path: '/settings' },
 ];
 
@@ -78,6 +78,9 @@ export function Sidebar() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
+    // Otherwise the next account signing in on this device would briefly see
+    // the previous one's currency.
+    clearCachedCurrency();
     window.location.href = '/login';
   };
 

@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
 import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
 import type { ExpenseFormValues } from '@/components/ExpenseForm';
+import { computeBudgetUtilization, nonEmptySections, type Budget } from '@/lib/budgetSections';
 
 interface Expense {
   _id: string;
@@ -29,19 +30,6 @@ function byRecency(a: Expense, b: Expense): number {
   const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
   if (byDate !== 0) return byDate;
   return new Date(b.createdAt ?? b.date).getTime() - new Date(a.createdAt ?? a.date).getTime();
-}
-
-interface CategoryAllocation {
-  name: string;
-  allocatedAmount: number;
-}
-
-interface Budget {
-  _id: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  categories: CategoryAllocation[];
 }
 
 export default function Dashboard() {
@@ -174,55 +162,8 @@ export default function Dashboard() {
     return expenses.filter(e => new Date(e.date) >= cutoff).sort(byRecency);
   })()
 
-  // Budget Utilization Logic
-  let budgetUtilization: { category: string, allocated: number, spent: number, remaining: number, percentage: number, rawPercentage: number }[] = [];
-  if (activeBudget) {
-    const start = new Date(activeBudget.startDate).getTime();
-    const end = new Date(activeBudget.endDate).setHours(23, 59, 59, 999);
-    
-    const expensesInBudget = expenses.filter(exp => {
-      const expDate = new Date(exp.date).getTime();
-      return expDate >= start && expDate <= end;
-    });
-
-    budgetUtilization = activeBudget.categories.map(cat => {
-      const spent = expensesInBudget
-        .filter(e => e.category === cat.name)
-        .reduce((sum, e) => sum + e.amount, 0);
-      const remaining = cat.allocatedAmount - spent;
-      const rawPercentage = cat.allocatedAmount > 0 ? (spent / cat.allocatedAmount) * 100 : 0;
-
-      return {
-        category: cat.name,
-        allocated: cat.allocatedAmount,
-        spent,
-        remaining,
-        // Capped — drives bar width, which can never exceed its track.
-        percentage: Math.min(rawPercentage, 100),
-        // Uncapped — what gets displayed, so 140% doesn't read as 100%.
-        rawPercentage,
-      };
-    });
-
-    // Rank by spend, heaviest first. Allocation breaks ties so a fresh budget
-    // (every category at zero) still ranks by intent rather than arbitrarily.
-    budgetUtilization.sort((a, b) => b.spent - a.spent || b.allocated - a.allocated);
-  }
-
-  // Roll-up for the summary strip above the rows.
-  const budgetSummary = (() => {
-    if (!activeBudget) return null;
-
-    const allocated = budgetUtilization.reduce((sum, c) => sum + c.allocated, 0);
-    const spent = budgetUtilization.reduce((sum, c) => sum + c.spent, 0);
-    const percentage = allocated > 0 ? (spent / allocated) * 100 : 0;
-
-    const end = new Date(activeBudget.endDate).setHours(23, 59, 59, 999);
-    const msLeft = end - Date.now();
-    const daysLeft = msLeft > 0 ? Math.ceil(msLeft / 86_400_000) : 0;
-
-    return { allocated, spent, remaining: allocated - spent, percentage, daysLeft };
-  })();
+  // Every section of the active budget measured against what's been recorded.
+  const budgetBreakdown = activeBudget ? computeBudgetUtilization(activeBudget, expenses) : null;
 
   return (
     <Layout>
@@ -261,7 +202,7 @@ export default function Dashboard() {
                   <DialogHeader>
                     <DialogTitle>Add New Expense</DialogTitle>
                   </DialogHeader>
-                  <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAddExpense} submitLabel="Save Expense" />
+                  <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAddExpense} submitLabel="Save Expense" showShortcuts />
                 </DialogContent>
               </Dialog>
 
@@ -279,12 +220,12 @@ export default function Dashboard() {
         </div>
 
         {/* Active Budget Utilization */}
-        {activeBudget && budgetSummary && (
+        {activeBudget && budgetBreakdown && (
           <BudgetUtilizationCard
             startDate={activeBudget.startDate}
             endDate={activeBudget.endDate}
-            categories={budgetUtilization}
-            summary={budgetSummary}
+            sections={nonEmptySections(budgetBreakdown.sections)}
+            totals={budgetBreakdown.totals}
           />
         )}
 

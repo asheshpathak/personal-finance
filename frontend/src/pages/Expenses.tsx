@@ -151,7 +151,7 @@ export default function Expenses() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px] rounded-2xl">
                 <DialogHeader><DialogTitle>Add New Expense</DialogTitle></DialogHeader>
-                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAdd} submitLabel="Save Expense" />
+                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAdd} submitLabel="Save Expense" showShortcuts />
               </DialogContent>
             </Dialog>
 

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { useCurrency } from '@/context/CurrencyContext';
 import type { Currency } from '@/context/CurrencyContext';
-import { CheckCircle2, DollarSign, IndianRupee } from 'lucide-react';
+import { CheckCircle2, DollarSign, IndianRupee, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CurrencyOption {
@@ -34,13 +34,30 @@ const currencyOptions: CurrencyOption[] = [
 
 export default function Settings() {
   const { currency, setCurrency } = useCurrency();
-  const [selected, setSelected] = useState<Currency>(currency);
-  const [saved, setSaved] = useState(false);
+  // Only the user's explicit pick is state. Everything else follows the stored
+  // preference, which lands a moment after mount once the account is fetched.
+  const [picked, setPicked] = useState<Currency | null>(null);
+  const selected = picked ?? currency;
 
-  const handleSave = () => {
-    setCurrency(selected);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await setCurrency(selected);
+      setPicked(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      console.error(err);
+      setError("Couldn't save your currency. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const hasChanges = selected !== currency;
@@ -70,7 +87,7 @@ export default function Settings() {
                 return (
                   <button
                     key={opt.code}
-                    onClick={() => setSelected(opt.code)}
+                    onClick={() => setPicked(opt.code)}
                     className={cn(
                       'relative flex flex-col items-start gap-3 p-4 sm:p-5 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer w-full',
                       isSelected
@@ -111,22 +128,34 @@ export default function Settings() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-2">
               <Button
                 onClick={handleSave}
-                disabled={!hasChanges && !saved}
+                disabled={saving || (!hasChanges && !saved)}
                 className={cn(
                   'px-8 transition-all duration-300 w-full sm:w-auto',
                   saved && 'bg-success text-white hover:bg-success hover:brightness-100'
                 )}
               >
-                {saved ? (
+                {saving ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Saving…
+                  </span>
+                ) : saved ? (
                   <span className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" /> Saved!
                   </span>
                 ) : 'Save Changes'}
               </Button>
-              {hasChanges && !saved && (
+              {hasChanges && !saved && !saving && (
                 <p className="text-sm text-muted-foreground">You have unsaved changes.</p>
               )}
             </div>
+
+            {error && (
+              <p className="text-sm text-destructive" role="alert">{error}</p>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Saved to your account, so it carries across every device you sign in on.
+            </p>
           </CardContent>
         </Card>
       </div>
