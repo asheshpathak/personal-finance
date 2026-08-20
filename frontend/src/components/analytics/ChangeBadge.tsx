@@ -20,7 +20,7 @@ export function ChangeBadge({
 }) {
   if (delta === null) {
     return (
-      <span className={cn('inline-flex items-center gap-1 text-xs text-muted-foreground', className)}>
+      <span className={cn('inline-flex items-center gap-1 text-caption text-muted-foreground', className)}>
         <Minus className="w-3.5 h-3.5" />
         No prior data
       </span>
@@ -35,8 +35,8 @@ export function ChangeBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center text-xs font-semibold tabular-nums',
-        flat ? 'text-muted-foreground' : up ? 'text-destructive' : 'text-success',
+        'inline-flex items-center text-caption font-semibold tnum',
+        flat ? 'text-muted-foreground' : up ? 'text-destructive' : 'text-positive-text',
         className
       )}
     >

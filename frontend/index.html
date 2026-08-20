@@ -3,15 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <!-- viewport-fit=cover lets env(safe-area-inset-*) resolve on notched iPhones.
          Zoom is deliberately left enabled — no maximum-scale/user-scalable. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0D0B13" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#F5F6F8" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="Tetra — track, plan and forecast your money." />
+    <!-- Installed to the home screen, iOS runs the app without browser chrome
+         and paints the status bar itself; without these it stays a bookmark. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Tetra" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      The `opsz,wght@14..32,100..900` range matters: request a bare family and
+      Google serves a pinned instance, the optical-size axis disappears, and
+      large type renders as small type scaled up. There is no error — the axis
+      is simply gone.
+    -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap"
       rel="stylesheet"
     />
     <title>Tetra</title>

@@ -12,10 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Switch } from '@/components/ui/switch';
 import { CATEGORY_GROUPS } from '@/lib/expenseCategories';
 import { PaymentShortcuts } from '@/components/PaymentShortcuts';
 import { api } from '@/lib/api';
 import type { PaymentShortcut } from '@/lib/paymentShortcuts';
+import { toDayKey } from '@/lib/dates';
 
 export const PAYMENT_MODES = ['Credit Card', 'Debit Card', 'Cash', 'Bank Transfer'];
 
@@ -30,12 +33,7 @@ export type ExpenseFormValues = {
 
 /** Local calendar date as `YYYY-MM-DD`. Avoids toISOString(), which is UTC and
  *  can land on the previous day for users in negative-offset timezones. */
-export function toDateInputValue(value: Date | string = new Date()): string {
-  const d = value instanceof Date ? value : new Date(value);
-  const month = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
-}
+export const toDateInputValue = toDayKey;
 
 export function emptyExpenseForm(): ExpenseFormValues {
   return { amount: '', category: '', paymentMode: '', description: '', date: toDateInputValue() };
@@ -131,15 +129,16 @@ export function ExpenseForm({
 
       <div className="space-y-2">
         <Label htmlFor="expense-date">Date</Label>
-        <Input
+        {/* The app's own calendar, not <input type="date">. The native control
+            renders as an iOS wheel here, a Windows flyout there and a Chrome
+            grid elsewhere — three visual languages, none of them this app's. */}
+        <DatePicker
           id="expense-date"
-          type="date"
-          required
+          value={values.date}
+          onChange={date => onChange({ date })}
           // Capped at today: this exists for backdating, and a future date would
           // silently drop the expense out of every "recent" window.
-          max={toDateInputValue()}
-          value={values.date}
-          onChange={e => onChange({ date: e.target.value })}
+          max={toDayKey()}
         />
       </div>
 
@@ -154,7 +153,7 @@ export function ExpenseForm({
                 itself and lands in the right budget section. */}
             {CATEGORY_GROUPS.map(group => (
               <SelectGroup key={group.label}>
-                <SelectLabel className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                <SelectLabel className="text-micro uppercase text-muted-foreground">
                   {group.label}
                 </SelectLabel>
                 {group.categories.map(c => (
@@ -191,21 +190,13 @@ export function ExpenseForm({
       </div>
 
       {showShortcuts && (
-        <label htmlFor="expense-save-shortcut" className="flex items-center gap-3 py-1 min-h-[44px] cursor-pointer">
-          <input
-            type="checkbox"
-            id="expense-save-shortcut"
-            checked={saveAsShortcut}
-            onChange={e => setSaveAsShortcut(e.target.checked)}
-            className="w-5 h-5 flex-shrink-0 rounded border-white/20 bg-white/[0.04] accent-primary [color-scheme:dark]"
-          />
-          <span className="min-w-0">
-            <span className="block text-sm font-medium leading-none">Save as shortcut</span>
-            <span className="block text-xs text-muted-foreground mt-1">
-              Pin this payment for one-tap entry next time.
-            </span>
-          </span>
-        </label>
+        <Switch
+          id="expense-save-shortcut"
+          checked={saveAsShortcut}
+          onCheckedChange={setSaveAsShortcut}
+          label="Save as shortcut"
+          description="Pin this payment for one-tap entry next time."
+        />
       )}
 
       <Button

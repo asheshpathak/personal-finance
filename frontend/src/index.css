@@ -3,87 +3,274 @@
 @tailwind utilities;
 
 /*
-  Tetra design system — dark-first, "electric violet on charcoal".
-  Immersive dark is the only theme; the palette lives in :root, not behind a
-  .dark class, so nothing has to toggle it on.
+  ════════════════════════════════════════════════════════════════════════════
+  Tetra design system — light, quiet, and built the way iOS builds a screen.
+  ════════════════════════════════════════════════════════════════════════════
+
+  There is one structural idea underneath everything here, and it is the single
+  biggest lever on whether an interface reads as "Apple" or as "a web app":
+
+      the page is grey, and the cards are white.
+
+  That is the opposite of Material, where surfaces get *lighter* as they rise.
+  Get the inversion right and elevation needs almost no shadow at all — a white
+  block on #F5F6F8 is only a 1.09:1 step, and that whisper is the entire
+  separation the App Store uses between a card and the page behind it.
+
+  Colour follows one rule: **the canvas is starved of chroma so a single hue can
+  be an event.** The page carries a chroma of roughly 0.004; the primary carries
+  0.221. That sixty-fold ratio is what "pop" actually is. It is not achieved by
+  adding more hues — every product that reads as premium here (Linear, Stripe,
+  Ramp, Monzo) uses exactly one, occasionally two.
+
+  Hierarchy is carried by **weight and opacity, never by colour**. Headline and
+  body are the same size in iOS; only the weight differs. Colour means
+  "actionable" or "status" and nothing else, which is why no body text in this
+  app is ever the primary hue.
+
+  Every value below was measured rather than eyeballed: contrast from sRGB
+  relative luminance, colour-vision separation via the Viénot–Brettel–Mollon
+  transform, and the ramp generated on a fixed OKLCH lightness ladder so that
+  "step 700" means "passes AA on white" in every hue.
 */
+
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
 
-    --background: 252 24% 6%;        /* deep violet-charcoal canvas */
-    --foreground: 250 20% 98%;
+    /* ── Canvas and surfaces ────────────────────────────────────────────────
+       The grey/white inversion described above. `subtle` is for wells that sit
+       *inside* a card — a nested surface goes down, not up. */
+    --background: 220 18% 97%;        /* #F5F6F8 — the page */
+    --foreground: 240 8% 9%;          /* #16161A — 18:1, the only true ink */
 
-    --card: 250 20% 9%;             /* elevated surface */
-    --card-foreground: 250 20% 98%;
+    --card: 0 0% 100%;                /* #FFFFFF */
+    --card-foreground: 240 8% 9%;
 
-    --popover: 250 22% 11%;
-    --popover-foreground: 250 20% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 8% 9%;
 
-    --primary: 255 100% 71%;        /* electric violet */
+    /* A well inside a card: inputs, quiet panels, table stripes. */
+    --subtle: 225 22% 97%;            /* #F4F5F8 */
+    --hover: 220 18% 93%;             /* #EBEDF1 */
+
+    /* ── Ink ────────────────────────────────────────────────────────────────
+       Three tiers, and they are load-bearing. iOS builds an entire list row
+       from size × opacity and nothing else: 17/15/13 at 100%/60%/30%. */
+    --muted: 220 18% 93%;             /* filled chips, quiet backgrounds */
+    --muted-foreground: 235 6% 38%;   /* #5B5C66 — 6.6:1, real reading text */
+    --faint: 235 5% 56%;              /* #8A8B95 — 3.4:1, non-text only */
+
+    --accent: 220 18% 93%;
+    --accent-foreground: 240 8% 9%;
+
+    /* ── Lines ──────────────────────────────────────────────────────────────
+       A hairline, not a border. 1.27:1 — present, never a frame. */
+    --border: 240 10% 90%;            /* #E4E4E9 */
+    --border-strong: 240 9% 84%;      /* #D3D3DA */
+    --input: 240 10% 90%;
+
+    /* ── Brand ──────────────────────────────────────────────────────────────
+       Indigo, at the step of the ladder where white text passes AA (5.47:1).
+       Deliberately one hue: the previous violet→fuchsia gradient is exactly
+       the kind of decoration that reads as gimmick, because a gradient is a
+       claim about importance that a colour cannot cash. */
+    --primary: 238 80% 62%;           /* #5055EB */
     --primary-foreground: 0 0% 100%;
+    --primary-hover: 238 64% 55%;     /* #4348D6 */
+    --primary-tint: 244 100% 97%;     /* #EFEEFF — chip fill */
+    --primary-border: 239 100% 89%;   /* #C9CAFF */
 
-    --secondary: 250 16% 16%;
-    --secondary-foreground: 0 0% 98%;
+    /* The pop. Used where money moves and almost nowhere else. */
+    --pop: 273 96% 64%;               /* #AB4AFB */
+    --pop-tint: 273 100% 97%;
 
-    --muted: 250 16% 15%;
-    --muted-foreground: 252 13% 66%;
+    --secondary: 220 18% 93%;
+    --secondary-foreground: 240 8% 9%;
 
-    --accent: 250 18% 18%;
-    --accent-foreground: 0 0% 98%;
+    --ring: 238 80% 62%;
 
-    --destructive: 353 90% 62%;     /* vivid rose-red, tuned to the palette */
+    /* ── Semantics ──────────────────────────────────────────────────────────
+       Green and red are pulled toward teal and vermillion on purpose. The
+       default fintech pair (#16A34A / #DC2626) collapses to a ΔE of 0.055
+       under deuteranopia — for roughly one man in sixteen, a gain and a loss
+       are the same swatch. These land at 0.156, and still read unmistakably as
+       green and red to everyone else.
+
+       Colour is never the only channel regardless: every delta in this app
+       carries a sign and an arrow. */
+    --positive: 166 100% 33%;         /* #00A77F — fills, bars, dots */
+    --positive-text: 165 100% 26%;    /* #008665 — 4.6:1, text grade */
+    --positive-tint: 155 86% 92%;
+    --positive-border: 156 59% 82%;
+
+    --destructive: 10 94% 62%;        /* #F96245 */
     --destructive-foreground: 0 0% 100%;
+    --destructive-text: 10 71% 49%;   /* #D54124 — 4.6:1 */
+    --destructive-tint: 11 100% 96%;
+    --destructive-border: 11 100% 89%;
 
-    --success: 152 68% 46%;
+    --warning: 43 100% 38%;           /* #C18900 */
+    --warning-text: 42 100% 30%;      /* #9B6D00 */
+    --warning-tint: 38 100% 93%;
+    --warning-border: 37 76% 82%;
 
-    --border: 250 16% 17%;
-    --input: 250 16% 17%;
-    --ring: 255 100% 71%;
+    --info: 213 100% 62%;             /* #3B94FF */
+    --info-text: 209 100% 44%;        /* #0074E2 */
+    --info-tint: 214 100% 96%;
+    --info-border: 214 100% 89%;
 
-    /* Signature gradient stops — violet → fuchsia. */
-    --grad-from: 258 100% 68%;
-    --grad-to: 315 95% 61%;
+    /* Kept for anything still reading `--success`. */
+    --success: 166 100% 33%;
 
-    --radius: 0.9rem;
+    /* ── Chart slots ────────────────────────────────────────────────────────
+       Eight hues, chosen by exhaustive search under three constraints at once:
+       ≥3:1 on both #FFFFFF and the page grey, ≥0.115 ΔE apart in normal
+       vision, and worst-case dichromat separation maximised.
+
+       The lightness alternates — 0.46 / 0.62 / 0.54 / 0.62 / 0.62 / 0.46 /
+       0.58 / 0.46 — and that zigzag is the load-bearing part. Okabe-Ito's
+       famous colour-blind safety *is* its lightness spread: flatten it to
+       satisfy contrast and separation collapses from 0.091 to 0.007. So the
+       order below is the order that was validated. Assign by slot. Never
+       re-sort, never generate a ninth. */
+    --chart-1: 248 71% 52%;           /* indigo   #442CDB */
+    --chart-2: 323 72% 54%;           /* magenta  #DE359D */
+    --chart-3: 158 52% 33%;           /* jade     #288060 */
+    --chart-4: 38 60% 42%;            /* amber    #AB7D2B */
+    --chart-5: 198 59% 46%;           /* cyan     #3091BB */
+    --chart-6: 0 65% 38%;             /* coral    #9E2222 */
+    --chart-7: 273 83% 58%;           /* violet   #9E3BED */
+    --chart-8: 215 13% 36%;           /* slate    #4F5967 */
+
+    /* ── Geometry ───────────────────────────────────────────────────────────
+       A 4pt grid, and nothing off it. The App Store uses 4 / 8 / 12 / 16 / 20 /
+       24 / 32 / 44 and never a 5, 6, 10, 14, 18 or 30. */
+    --radius: 1rem;
+
+    /* Height of the fixed mobile top bar, notch included. Every page offsets
+       its content by this, so the number lives in exactly one place. */
+    --topbar-height: calc(3.5rem + env(safe-area-inset-top));
+    /* Clearance for the floating tab bar: its height, its inset, and the home
+       indicator underneath it. */
+    --tabbar-height: calc(4.25rem + env(safe-area-inset-bottom));
+
+    /* ── Motion ─────────────────────────────────────────────────────────────
+       Springs, expressed as `linear()` easings computed from SwiftUI's own
+       parameters (ω = 2π/duration, ζ = 1 − bounce). The reason to bother:
+       nothing on iOS decelerates linearly, every arrival is asymptotic, and a
+       cubic-bezier can imply a spring but cannot produce the settle. */
+    --spring-smooth: linear(0,.072,.218,.376,.521,.641,.736,.809,.863,.903,.932,.952,.967,.977,.984,.989,.993,.995,1);
+    --spring-snappy: linear(0,.049,.162,.3,.439,.567,.676,.766,.837,.891,.931,.959,.979,.991,.999,1.003,1.006,1.006,1);
+    --spring-quick:  linear(0,.048,.158,.293,.43,.556,.665,.755,.826,.881,.922,.951,.972,.986,.995,1,1.003,1.005,1);
+
+    /* The iOS curve. y2 = 1 with x2 = 0: hard front-load, long tail. This is
+       what a sheet and a navigation push are animated with. */
+    --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+    --dur-micro: 150ms;
+    --dur-ui: 250ms;
+    --dur-nav: 350ms;
+    --dur-sheet: 480ms;
   }
 
   * {
     @apply border-border;
   }
 
+  /*
+    Horizontal overflow is killed at BOTH elements on purpose.
+
+    `overflow-x: clip` on body alone doesn't stop the page panning sideways —
+    when body is clipped the viewport propagation rules hand the overflow to
+    html, which then scrolls instead. Clipping both ends it for good.
+
+    `clip`, not `hidden`: `hidden` makes the element a scroll container, which
+    silently kills every `position: sticky` descendant. That is exactly the
+    "sticky doesn't work" symptom, and swapping in `clip` is the fix.
+  */
   html {
     -webkit-text-size-adjust: 100%;
+    overflow-x: clip;
+    /* One scroll anchor for the document — nested scrollers are what capture
+       momentum on iOS and produce dead, unresponsive scrolling. */
+    scroll-behavior: smooth;
+    /* Feeds the rendered size into Inter's optical-size axis, which tightens
+       spacing and thins stems as type gets larger. It is the difference
+       between a heading that looks set and one that looks scaled. */
+    font-optical-sizing: auto;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: clip;
     overscroll-behavior-y: none;
-    /* A faint fixed aurora so the canvas never reads as a flat void. */
-    background-image:
-      radial-gradient(60rem 40rem at 12% -8%, hsl(258 100% 62% / 0.12), transparent 60%),
-      radial-gradient(50rem 40rem at 100% 0%, hsl(315 95% 55% / 0.08), transparent 55%);
-    background-attachment: fixed;
+    font-size: 17px;
+    line-height: 1.47;
+    letter-spacing: -0.014em;
+  }
+
+  /*
+    Reduced motion means *cross-dissolve*, not "no animation" — a transition
+    that vanishes entirely removes the causal link between a tap and what it
+    produced, which is worse for comprehension than the movement was. So
+    transforms are killed and opacity is kept.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 120ms !important;
+      transition-timing-function: linear !important;
+    }
+  }
+
+  /*
+    Every interactive control, everywhere:
+      · `touch-action: manipulation` removes the 300ms tap delay and, crucially,
+        stops a double-tap on a button from zooming the page;
+      · the tap highlight is a grey flash Safari paints over our own press state;
+      · a label that can be text-selected turns a mis-timed tap into a text
+        selection instead of a press, which is the single biggest reason
+        buttons feel "not tactile" on a phone.
+  */
+  button,
+  [role='button'],
+  a,
+  label,
+  summary,
+  input[type='checkbox'],
+  input[type='radio'] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  [role='button'],
+  summary {
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.3);
+    background: hsl(var(--primary) / 0.18);
   }
 
-  /* Slim, Spotify-style scrollbars. */
+  /* Slim and light, to match the canvas. */
   ::-webkit-scrollbar {
     width: 12px;
     height: 12px;
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(250 10% 32%);
+    background: hsl(240 9% 80%);
     border-radius: 9999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(250 10% 44%);
+    background: hsl(240 8% 68%);
     background-clip: content-box;
   }
   ::-webkit-scrollbar-track {
@@ -92,19 +279,259 @@
 }
 
 @layer components {
-  /* The gradient wash used on hero headers and feature cards. */
-  .bg-hero {
-    background-image:
-      radial-gradient(120% 130% at 0% 0%, hsl(var(--grad-from) / 0.42), transparent 58%),
-      radial-gradient(120% 130% at 100% 0%, hsl(var(--grad-to) / 0.32), transparent 55%),
-      linear-gradient(180deg, hsl(250 22% 14%), hsl(var(--card)));
+  /*
+    ── Numerals ─────────────────────────────────────────────────────────────
+    Inter's proportional digits span 833 to 1323 units — a 1 is dramatically
+    narrower than a 0. In a right-aligned money column that makes digits jitter
+    between rows, and any figure that animates visibly shudders as digits swap.
+    `tnum` maps all ten to one advance.
+
+    Applied to money, table cells, stat values and axis labels — and never to
+    prose, where proportional figures genuinely read better. That is exactly
+    what iOS does: monospaced digits are opt-in per label, not a global.
+  */
+  .tnum {
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
-  /* Solid text set in the signature gradient. */
-  .text-gradient {
-    background-image: linear-gradient(120deg, hsl(var(--grad-from)), hsl(var(--grad-to)));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+  /*
+    ── Press physics ────────────────────────────────────────────────────────
+    A press should answer instantly and release slowly — that asymmetry is what
+    reads as physical. Below the threshold where a delay is felt on the way
+    down; a spring on the way back up.
+
+    `active:` rather than `:hover` is what carries this on touch, where there is
+    no hover at all.
+  */
+  .tactile {
+    transition:
+      transform var(--dur-ui) var(--ease-out),
+      background-color var(--dur-micro) ease-out,
+      border-color var(--dur-micro) ease-out,
+      box-shadow var(--dur-micro) ease-out,
+      opacity var(--dur-micro) ease-out;
+    will-change: transform;
+  }
+
+  .tactile:active:not(:disabled) {
+    transform: scale(0.965);
+    transition-duration: 60ms;
+  }
+
+  /* Large surfaces travel less — the same scale on a full-width card reads as
+     the whole page lurching. */
+  .tactile-lg:active:not(:disabled) {
+    transform: scale(0.985);
+    transition-duration: 60ms;
+  }
+
+  /*
+    ── Hairline ─────────────────────────────────────────────────────────────
+    One device pixel, not one CSS pixel. On a 2× screen a 1px rule is twice as
+    heavy as the one iOS draws, and a list of them reads as a grid.
+  */
+  .hairline {
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  @media (min-resolution: 2dppx) {
+    .hairline { border-bottom-width: 0.5px; }
+  }
+
+  .hairline-t {
+    border-top: 1px solid hsl(var(--border));
+  }
+  @media (min-resolution: 2dppx) {
+    .hairline-t { border-top-width: 0.5px; }
+  }
+
+  /*
+    ── Glass ────────────────────────────────────────────────────────────────
+    Bars only. Apple's guidance is explicit that this material belongs to the
+    *functional* layer — bars, toolbars, floating controls — and not to
+    content, and for a money app that is doubly true: a translucent background
+    behind a column of figures destroys the contrast that makes them scannable.
+    Every card, table and chart in this app stays on opaque white.
+
+    The inset highlight is doing more work than the blur. It is the specular
+    top edge of a piece of glass, and without it the surface reads as a plain
+    translucent panel.
+  */
+  .glass {
+    background-color: hsl(0 0% 100% / 0.72);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.6),
+      0 0 0 0.5px hsl(240 8% 9% / 0.05),
+      0 8px 24px hsl(240 8% 9% / 0.06);
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass { background-color: hsl(0 0% 100% / 0.95); }
+  }
+
+  /*
+    The scroll edge effect: content blurs and fades as it passes under a bar,
+    rather than sliding under a hard line. The most iOS-26 detail available on
+    the web, and it costs one sticky element.
+  */
+  .scroll-edge {
+    position: sticky;
+    top: 0;
+    height: 1.75rem;
+    margin-bottom: -1.75rem;
+    pointer-events: none;
+    z-index: 20;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+    background: linear-gradient(to bottom, hsl(var(--background) / 0.9), transparent);
+  }
+
+  /*
+    ── Horizontal strips ────────────────────────────────────────────────────
+    `overscroll-behavior-x: contain` is the load-bearing bit: without it,
+    swiping past the end of a filter row hands the gesture to the document and
+    the whole page slides sideways.
+  */
+  .scroll-x {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+
+  .scroll-x > * {
+    scroll-snap-align: start;
+  }
+
+  /*
+    The App Store shelf: one card per swipe, with the next peeking so the
+    affordance is visible without a scrollbar.
+  */
+  .shelf {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: min(20rem, calc(100% - 3rem));
+    gap: 0.75rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1px;
+    scrollbar-width: none;
+  }
+  .shelf::-webkit-scrollbar { display: none; }
+  .shelf > * { scroll-snap-align: start; }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Sticky header row for tables that scroll inside their own card. */
+  .sticky-head thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: hsl(var(--card));
+  }
+
+  /*
+    ── Focus ────────────────────────────────────────────────────────────────
+    A soft shadow of the accent rather than a hard outline — the same treatment
+    Linear uses. It reads as the control glowing rather than as a rectangle
+    being drawn around it, and it survives on a rounded shape where an outline
+    would corner badly.
+  */
+  .focus-ring {
+    outline: none;
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.28);
+  }
+}
+
+/*
+  ── Entrance animation ──────────────────────────────────────────────────────
+  Declared outside @layer so the keyframes always survive Tailwind's purge, and
+  kept to the handful actually used. Everything animates `transform` and
+  `opacity` only — never height, never top.
+*/
+@keyframes tetra-pop-in {
+  from { opacity: 0; transform: scale(0.97) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes tetra-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes tetra-dialog-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes tetra-sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes tetra-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tetra-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+@layer utilities {
+  .animate-pop-in {
+    animation: tetra-pop-in var(--dur-ui) var(--spring-snappy);
+  }
+
+  .animate-fade-in {
+    animation: tetra-fade-in var(--dur-ui) ease-out;
+  }
+
+  .animate-dialog-in {
+    animation: tetra-dialog-in 300ms var(--spring-snappy);
+  }
+
+  .animate-sheet-in {
+    animation: tetra-sheet-in var(--dur-sheet) var(--ease-ios);
+  }
+
+  /* Content arriving. Staggered by the caller with an inline delay. */
+  .animate-rise {
+    animation: tetra-rise 420ms var(--ease-out) both;
+  }
+
+  /* Loading placeholder: a sweep across the subtle fill, never a spinner —
+     a skeleton says what is coming, a spinner says only "wait". */
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--hover)) 40%,
+      hsl(var(--muted)) 80%
+    );
+    background-size: 200% 100%;
+    animation: tetra-shimmer 1.6s linear infinite;
+  }
+
+  /* Safe-area-aware offsets for content under the fixed bars. */
+  .pt-topbar {
+    padding-top: var(--topbar-height);
+  }
+
+  .pb-tabbar {
+    padding-bottom: var(--tabbar-height);
   }
 }

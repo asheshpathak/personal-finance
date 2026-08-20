@@ -42,13 +42,13 @@ export function ChartCard<T>({
     <Card className={cn('rounded-2xl border shadow-sm p-4 sm:p-6 min-w-0', className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
         <div className="min-w-0">
-          <h2 className="text-base font-bold tracking-tight">{title}</h2>
-          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          <h2 className="text-callout font-bold ">{title}</h2>
+          {subtitle && <p className="text-caption text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {action}
-          <div className="flex rounded-lg bg-white/[0.04] p-0.5" role="group" aria-label={`${title} view`}>
+          <div className="flex rounded-lg bg-subtle p-0.5" role="group" aria-label={`${title} view`}>
             {([
               { key: 'chart', label: 'Chart', Icon: BarChart3 },
               { key: 'table', label: 'Table', Icon: Table2 },
@@ -60,8 +60,8 @@ export function ChartCard<T>({
                 aria-pressed={view === key}
                 aria-controls={panelId}
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-md px-2.5 h-9 md:h-8 text-xs font-semibold transition-colors',
-                  view === key ? 'bg-white/[0.10] text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  'inline-flex items-center gap-1.5 rounded-md px-2.5 h-9 md:h-8 text-caption font-semibold transition-colors',
+                  view === key ? 'bg-border text-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -76,18 +76,18 @@ export function ChartCard<T>({
         {view === 'chart' ? (
           children
         ) : rows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Nothing to show for this selection.</p>
+          <p className="py-8 text-center text-subhead text-muted-foreground">Nothing to show for this selection.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-subhead">
               <thead>
-                <tr className="border-b border-white/[0.08]">
+                <tr className="border-b border-border">
                   {columns.map(col => (
                     <th
                       key={col.header}
                       scope="col"
                       className={cn(
-                        'py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap',
+                        'py-2 text-micro font-bold uppercase text-muted-foreground whitespace-nowrap',
                         col.numeric ? 'text-right pl-4' : 'text-left'
                       )}
                     >
@@ -98,13 +98,13 @@ export function ChartCard<T>({
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <tr key={i} className="border-b border-white/[0.05] last:border-0">
+                  <tr key={i} className="border-b border-border last:border-0">
                     {columns.map(col => (
                       <td
                         key={col.header}
                         className={cn(
                           'py-2 whitespace-nowrap',
-                          col.numeric ? 'text-right tabular-nums pl-4' : 'text-left'
+                          col.numeric ? 'text-right tnum pl-4' : 'text-left'
                         )}
                       >
                         {col.cell(row)}

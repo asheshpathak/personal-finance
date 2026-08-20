@@ -1,328 +1,285 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
+import { Plus, Receipt, Search, SlidersHorizontal, X } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, CreditCard, Banknote, Landmark, Pencil, Trash2, Receipt } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useCurrency } from '@/context/CurrencyContext';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { EmptyState, PageHeader, Skeleton } from '@/components/ui/section';
+import { SegmentedButton } from '@/components/ui/segmented';
+import { Stat, StatRow } from '@/components/ui/stat';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { ExpenseList, type ExpenseItem } from '@/components/ExpenseList';
+import { ExpenseEditDialog } from '@/components/ExpenseEditDialog';
+import { ExpenseRangeFilter } from '@/components/ExpenseRangeFilter';
+import { useCurrency } from '@/context/CurrencyContext';
+import { useQuickAdd } from '@/context/QuickAddContext';
+import { useFinances } from '@/lib/useFinances';
 import { api } from '@/lib/api';
-import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
-import type { ExpenseFormValues } from '@/components/ExpenseForm';
+import { defaultRangeFilter, describeRange, filterByRange, type RangeFilter } from '@/lib/expenseRange';
+import { cn } from '@/lib/utils';
 
-interface Expense {
-  _id: string;
-  amount: number;
-  category: string;
-  paymentMode: string;
-  description: string;
-  date: string;
-  createdAt?: string;
-}
-
-/** Newest first, by expense day then by when it was recorded. Same-day entries
- *  are stored at local noon, so `date` alone ties — createdAt breaks it. */
-function byRecency(a: Expense, b: Expense): number {
-  const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
-  if (byDate !== 0) return byDate;
-  return new Date(b.createdAt ?? b.date).getTime() - new Date(a.createdAt ?? a.date).getTime();
-}
-
-type FilterKey = '1D' | '3D' | '5D' | '1W' | '1M' | 'ALL';
-
-const FILTERS: { label: string; key: FilterKey; days: number | null }[] = [
-  { label: '1D',  key: '1D',  days: 1   },
-  { label: '3D',  key: '3D',  days: 3   },
-  { label: '5D',  key: '5D',  days: 5   },
-  { label: '1W',  key: '1W',  days: 7   },
-  { label: '1M',  key: '1M',  days: 30  },
-  { label: 'All', key: 'ALL', days: null },
-];
-
+/**
+ * Everything recorded.
+ *
+ * The addition that matters most here is **search**. Every chart in this app
+ * answers a question somebody designed it to answer; "what did I spend at that
+ * place near the office in March" is not one of them, and it is the single most
+ * common thing a person actually wants from a transaction history. A filter row
+ * cannot substitute for it — you have to already know the category.
+ */
 export default function Expenses() {
-  const { formatAmount } = useCurrency();
-
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('ALL');
-
-  // Add / Edit form state
-  const [isAddOpen, setIsAddOpen]   = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editId, setEditId]         = useState<string | null>(null);
-  const [form, setForm] = useState<ExpenseFormValues>(emptyExpenseForm);
-  const patchForm = (patch: Partial<ExpenseFormValues>) => setForm(prev => ({ ...prev, ...patch }));
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-
-  const fetchExpenses = async () => {
-    try {
-      setExpenses(await api.get<Expense[]>('/api/expenses'));
-    } catch (err) { console.error(err); }
-  };
-
-  useEffect(() => { fetchExpenses(); }, []);
-
-  const resetForm = () => {
-    setForm(emptyExpenseForm());
-    setEditId(null);
-  };
-
-  // Send the date as local noon so the stored UTC instant can't slip to the
-  // adjacent day for users far from UTC.
-  const toPayload = (values: ExpenseFormValues) => ({
-    amount: Number(values.amount),
-    category: values.category,
-    paymentMode: values.paymentMode,
-    description: values.description,
-    date: new Date(`${values.date}T12:00:00`).toISOString(),
+  const { formatRounded } = useCurrency();
+  const { openQuickAdd } = useQuickAdd();
+  const { expenses, loading, ready, error, reload } = useFinances({
+    budgets: false,
+    subscriptions: false,
   });
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.post('/api/expenses', toPayload(form));
-      setIsAddOpen(false); resetForm(); fetchExpenses();
-    } catch (err) { console.error(err); }
-  };
+  const [range, setRange] = useState<RangeFilter>(() => defaultRangeFilter('1M'));
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const handleEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editId) return;
-    try {
-      await api.put(`/api/expenses/${editId}`, toPayload(form));
-      setIsEditOpen(false); resetForm(); fetchExpenses();
-    } catch (err) { console.error(err); }
-  };
+  const [editing, setEditing] = useState<ExpenseItem | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const confirmDelete = async () => {
+  /** Categories present in the data, most-used first — so the chips a reader
+   *  wants are the ones they see. */
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const expense of expenses) {
+      counts.set(expense.category, (counts.get(expense.category) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+  }, [expenses]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return filterByRange(expenses, range).filter(expense => {
+      if (category && expense.category !== category) return false;
+      if (!needle) return true;
+      // Searches the note, the category and the payment mode together. Three
+      // separate fields would mean the reader has to know which one holds the
+      // word they remember — and they don't.
+      return (
+        (expense.description ?? '').toLowerCase().includes(needle) ||
+        expense.category.toLowerCase().includes(needle) ||
+        expense.paymentMode.toLowerCase().includes(needle)
+      );
+    });
+  }, [expenses, range, query, category]);
+
+  const total = useMemo(() => filtered.reduce((sum, e) => sum + e.amount, 0), [filtered]);
+  const average = filtered.length > 0 ? total / filtered.length : 0;
+  const largest = useMemo(
+    () => filtered.reduce((best, e) => (best === null || e.amount > best.amount ? e : best), null as ExpenseItem | null),
+    [filtered]
+  );
+
+  const filtering = Boolean(query.trim()) || category !== null;
+
+  const removeExpense = async () => {
     if (!deleteId) return;
     try {
       await api.delete(`/api/expenses/${deleteId}`);
-      fetchExpenses();
-    } catch (err) { console.error(err); }
+      reload();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const openEdit = (exp: Expense) => {
-    setEditId(exp._id);
-    setForm({
-      amount: exp.amount.toString(),
-      category: exp.category,
-      paymentMode: exp.paymentMode,
-      description: exp.description || '',
-      date: toDateInputValue(exp.date),
-    });
-    setIsEditOpen(true);
-  };
-
-  const filteredExpenses = (() => {
-    const filter = FILTERS.find(f => f.key === activeFilter)!;
-    const list = filter.days
-      ? expenses.filter(e => {
-          const cutoff = new Date();
-          cutoff.setDate(cutoff.getDate() - filter.days!);
-          cutoff.setHours(0, 0, 0, 0);
-          return new Date(e.date) >= cutoff;
-        })
-      : expenses;
-    return [...list].sort(byRecency);
-  })();
-
-  const totalFiltered = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  if (loading && !ready) {
+    return (
+      <Layout title="Activity">
+        <div className="flex flex-col gap-5">
+          <Skeleton className="h-9 w-40" />
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <Skeleton className="h-96 w-full rounded-2xl" />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-6 sm:gap-8">
+    <Layout title="Activity">
+      <div className="flex flex-col gap-5 min-w-0">
+        <PageHeader
+          title="Activity"
+          lede="Everything you've recorded, newest first."
+          action={
+            // Hidden on touch: the tab bar's action button is two inches from
+            // the thumb and does the same thing. Two entry points to one flow
+            // on one screen is clutter, not convenience.
+            <Button className="hidden md:inline-flex" onClick={() => openQuickAdd()}>
+              <Plus strokeWidth={2.5} />
+              Record
+            </Button>
+          }
+        />
 
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">Expenses</h1>
-            <p className="text-muted-foreground mt-1">Full history of all your recorded expenses.</p>
-          </div>
+        {error && (
+          <p role="alert" className="rounded-xl bg-destructive-tint px-4 py-3 text-footnote text-destructive-text">
+            {error}
+          </p>
+        )}
 
-          <div className="flex gap-3 flex-shrink-0">
-            {/* Add dialog */}
-            <Dialog open={isAddOpen} onOpenChange={open => { setIsAddOpen(open); if (!open) resetForm(); }}>
-              <DialogTrigger asChild>
-                <Button className="rounded-xl px-4 sm:px-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm w-full sm:w-auto">
-                  <Plus className="w-4 h-4 mr-2" /> Add Expense
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl">
-                <DialogHeader><DialogTitle>Add New Expense</DialogTitle></DialogHeader>
-                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAdd} submitLabel="Save Expense" showShortcuts />
-              </DialogContent>
-            </Dialog>
-
-            {/* Edit dialog (opened programmatically) */}
-            <Dialog open={isEditOpen} onOpenChange={open => { setIsEditOpen(open); if (!open) resetForm(); }}>
-              <DialogContent className="sm:max-w-[425px] rounded-2xl">
-                <DialogHeader><DialogTitle>Edit Expense</DialogTitle></DialogHeader>
-                <ExpenseForm values={form} onChange={patchForm} onSubmit={handleEdit} submitLabel="Update Expense" />
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        {/* Stats bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-          <Card className="rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
-            <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">Total (all time)</p>
-            <p className="text-lg sm:text-2xl font-bold tracking-tight tabular-nums break-words">{formatAmount(expenses.reduce((s, e) => s + e.amount, 0))}</p>
-          </Card>
-          <Card className="rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
-            <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">Showing period</p>
-            <p className="text-lg sm:text-2xl font-bold tracking-tight tabular-nums break-words">{formatAmount(totalFiltered)}</p>
-          </Card>
-          <Card className="col-span-2 sm:col-span-1 rounded-2xl p-4 sm:p-5 border shadow-sm min-w-0">
-            <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">Transactions</p>
-            <p className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2 tabular-nums">
-              <Receipt className="w-5 h-5 text-muted-foreground" />
-              {filteredExpenses.length}
-            </p>
-          </Card>
-        </div>
-
-        {/* Filter + Table */}
-        <div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-            <h2 className="text-base font-semibold text-muted-foreground">All Transactions</h2>
-            <div className="flex gap-1.5 flex-wrap">
-              {FILTERS.map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => setActiveFilter(f.key)}
-                  className={cn(
-                    'rounded-lg h-11 md:h-9 px-4 text-xs font-semibold transition-all duration-150',
-                    activeFilter === f.key
-                      ? 'bg-foreground text-background shadow-sm'
-                      : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Desktop Table */}
-          <Card className="border shadow-sm bg-card rounded-2xl overflow-hidden hidden lg:block">
-            <Table>
-              <TableHeader className="bg-muted/30">
-                <TableRow className="border-b border-muted">
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider">Date</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider">Description</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider">Category</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider hidden xl:table-cell">Method</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Amount</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredExpenses.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                      No expenses in this period.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredExpenses.map(expense => (
-                    <TableRow key={expense._id} className="border-b border-muted/50 hover:bg-muted/20 transition-colors">
-                      <TableCell className="font-medium text-muted-foreground whitespace-nowrap">
-                        {new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </TableCell>
-                      <TableCell className="font-semibold">{expense.description || expense.category}</TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
-                          {expense.category}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell">
-                        <div className="flex items-center gap-2 text-muted-foreground whitespace-nowrap">
-                          {expense.paymentMode === 'Credit Card' ? <CreditCard className="w-4 h-4" /> :
-                           expense.paymentMode === 'Cash'        ? <Banknote   className="w-4 h-4" /> :
-                                                                   <Landmark   className="w-4 h-4" />}
-                          <span className="text-sm">{expense.paymentMode}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-bold whitespace-nowrap">
-                        {formatAmount(expense.amount)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => openEdit(expense)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+        {expenses.length === 0 && ready ? (
+          <EmptyState
+            icon={Receipt}
+            title="Nothing here yet"
+            body="Every total, chart and forecast in this app is built from what you record. One payment is enough to start."
+            action={
+              <Button size="lg" onClick={() => openQuickAdd()}>
+                <Plus strokeWidth={2.5} />
+                Record a payment
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            {/* ── Search ───────────────────────────────────────────────── */}
+            <div className="flex gap-2 min-w-0">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
+                <Input
+                  value={query}
+                  onChange={event => setQuery(event.target.value)}
+                  placeholder="Search notes, categories, methods…"
+                  aria-label="Search payments"
+                  className="pl-10 pr-10"
+                  type="search"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                    className="tactile absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-faint hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 )}
-              </TableBody>
-            </Table>
-          </Card>
+              </div>
 
-          {/* Mobile Card List */}
-          <div className="lg:hidden space-y-3">
-            {filteredExpenses.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground rounded-2xl border bg-card">No expenses in this period.</div>
-            ) : (
-              filteredExpenses.map(expense => (
-                <Card key={expense._id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{expense.description || expense.category}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
-                          {expense.category}
-                        </span>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          {expense.paymentMode === 'Credit Card' ? <CreditCard className="w-3 h-3" /> :
-                           expense.paymentMode === 'Cash'        ? <Banknote   className="w-3 h-3" /> :
-                                                                   <Landmark   className="w-3 h-3" />}
-                          {expense.paymentMode}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="font-bold text-lg tabular-nums flex-shrink-0">{formatAmount(expense.amount)}</span>
-                  </div>
+              <Button
+                variant={category ? 'tinted' : 'outline'}
+                size="icon"
+                onClick={() => setFiltersOpen(open => !open)}
+                aria-expanded={filtersOpen}
+                aria-label="Filter by category"
+              >
+                <SlidersHorizontal />
+              </Button>
+            </div>
 
-                  {/* Full-width, labelled actions — unmistakably tappable with a thumb. */}
-                  <div className="flex gap-2.5 mt-4 pt-3.5 border-t border-white/[0.06]">
-                    <Button variant="outline" className="flex-1 h-11 gap-2" onClick={() => openEdit(expense)}>
-                      <Pencil className="w-4 h-4" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1 h-11 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/40"
-                      onClick={() => setDeleteId(expense._id)}
+            {/* ── Period ───────────────────────────────────────────────── */}
+            <ExpenseRangeFilter value={range} onChange={setRange} scope="all" />
+
+            {/* ── Category chips ───────────────────────────────────────── */}
+            {filtersOpen && categories.length > 0 && (
+              <div className="rounded-xl bg-card border border-border p-3 min-w-0">
+                <p className="text-overline uppercase text-faint">Category</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {categories.slice(0, 18).map(name => (
+                    <SegmentedButton
+                      key={name}
+                      size="sm"
+                      selected={category === name}
+                      onClick={() => setCategory(current => (current === name ? null : name))}
                     >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </Button>
-                  </div>
-                </Card>
-              ))
+                      {name}
+                    </SegmentedButton>
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-        </div>
 
+            {/* ── The read-out ─────────────────────────────────────────── */}
+            <div className="rounded-2xl border border-border bg-card shadow-card p-5 min-w-0">
+              <StatRow>
+                <Stat
+                  label={describeRange(range)}
+                  value={formatRounded(total)}
+                  hint={`${filtered.length} ${filtered.length === 1 ? 'payment' : 'payments'}`}
+                />
+                <Stat label="Average" value={formatRounded(average)} hint="per payment" />
+                <Stat
+                  label="Largest"
+                  value={largest ? formatRounded(largest.amount) : '—'}
+                  hint={largest ? (largest.description || largest.category) : 'nothing in range'}
+                />
+              </StatRow>
+            </div>
+
+            {/* ── Active filters ───────────────────────────────────────── */}
+            {filtering && (
+              <div className="flex flex-wrap items-center gap-2">
+                {category && (
+                  <Badge tone="primary" size="lg" className="gap-1.5">
+                    {category}
+                    <button
+                      type="button"
+                      onClick={() => setCategory(null)}
+                      aria-label={`Clear ${category} filter`}
+                      className="tactile -mr-1 flex h-5 w-5 items-center justify-center rounded-full hover:bg-primary/15"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {query.trim() && (
+                  <Badge tone="neutral" size="lg">“{query.trim()}”</Badge>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setQuery(''); setCategory(null); }}
+                  className="tactile text-footnote font-semibold text-primary"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+
+            {/* ── The list ─────────────────────────────────────────────── */}
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={Search}
+                title="Nothing matches"
+                body={
+                  filtering
+                    ? 'Try a different word, or widen the period.'
+                    : 'No payments were recorded in this period.'
+                }
+                action={
+                  filtering ? (
+                    <Button variant="outline" onClick={() => { setQuery(''); setCategory(null); }}>
+                      Clear filters
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <div className={cn('rounded-2xl border border-border bg-card shadow-card px-4 py-3 sm:px-5 min-w-0')}>
+                <ExpenseList expenses={filtered} onOpen={setEditing} />
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      <ExpenseEditDialog
+        expense={editing}
+        onOpenChange={open => { if (!open) setEditing(null); }}
+        onSaved={reload}
+        onDelete={setDeleteId}
+      />
 
       <DeleteConfirmDialog
         open={deleteId !== null}
         onOpenChange={open => { if (!open) setDeleteId(null); }}
-        title="Delete expense?"
-        description="This expense will be permanently removed."
-        onConfirm={confirmDelete}
+        title="Delete this payment?"
+        description="It will be removed permanently, and every total that includes it will change."
+        onConfirm={removeExpense}
       />
     </Layout>
   );

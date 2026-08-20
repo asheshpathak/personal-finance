@@ -1,423 +1,353 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight, CalendarClock, Plus, Receipt, Sparkles } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, CreditCard, Banknote, Landmark, Pencil, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useCurrency } from '@/context/CurrencyContext';
+import { EmptyState, SectionHeader, Skeleton } from '@/components/ui/section';
+import { Badge } from '@/components/ui/badge';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { ExpenseList, byRecency, type ExpenseItem } from '@/components/ExpenseList';
+import { ExpenseEditDialog } from '@/components/ExpenseEditDialog';
+import { SafeToSpend } from '@/components/home/SafeToSpend';
+import { RhythmCard } from '@/components/home/RhythmCard';
+import { BriefCard } from '@/components/BriefCard';
+import { useCurrency } from '@/context/CurrencyContext';
+import { useQuickAdd } from '@/context/QuickAddContext';
+import { useFinances } from '@/lib/useFinances';
 import { api } from '@/lib/api';
-import { BudgetUtilizationCard } from '@/components/BudgetUtilizationCard';
-import { NonBudgetedSpendsCard } from '@/components/NonBudgetedSpendsCard';
-import { ExpenseForm, emptyExpenseForm, toDateInputValue } from '@/components/ExpenseForm';
-import type { ExpenseFormValues } from '@/components/ExpenseForm';
-import { computeBudgetUtilization, expensesInPeriod, nonEmptySections, type Budget } from '@/lib/budgetSections';
+import { computeBudgetUtilization } from '@/lib/budgetSections';
+import { projectPeriod } from '@/lib/forecast';
+import { buildRhythm } from '@/lib/rhythm';
+import { findAnomalies } from '@/lib/anomaly';
+import { formatDay, fromDayKey, startOfMonth, endOfMonth, toDayKey } from '@/lib/dates';
 
-interface Expense {
-  _id: string;
-  amount: number;
-  category: string;
-  paymentMode: string;
-  description: string;
-  date: string;
-  createdAt?: string;
-}
-
-/** Newest first, by expense day then by when it was recorded. Same-day entries
- *  are stored at local noon, so `date` alone ties — createdAt breaks it. */
-function byRecency(a: Expense, b: Expense): number {
-  const byDate = new Date(b.date).getTime() - new Date(a.date).getTime();
-  if (byDate !== 0) return byDate;
-  return new Date(b.createdAt ?? b.date).getTime() - new Date(a.createdAt ?? a.date).getTime();
-}
-
+/**
+ * Home.
+ *
+ * The order of this page is an argument. A dashboard that opens with a wall of
+ * charts has no verb in it — the reader has to decide what to do with the
+ * information, every single time. So the first thing on screen is a *decision*
+ * ("how much can I spend today"), the second is *judgement* ("here is what
+ * stands out"), and only then does it become *record* — what happened, and
+ * what is coming.
+ */
 export default function Dashboard() {
-  const { formatAmount } = useCurrency();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [activeBudget, setActiveBudget] = useState<Budget | null>(null);
-  
-  // Add Expense State
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [form, setForm] = useState<ExpenseFormValues>(emptyExpenseForm);
-  const patchForm = (patch: Partial<ExpenseFormValues>) => setForm(prev => ({ ...prev, ...patch }));
+  const { formatMoney, formatRounded } = useCurrency();
+  const { openQuickAdd } = useQuickAdd();
+  const { expenses, subscriptions, activeBudget, loading, ready, error, reload } = useFinances();
 
-  // Edit Expense State
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editExpenseId, setEditExpenseId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<ExpenseItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  
-  // Filter State
-  type FilterKey = '1D' | '3D' | '5D' | '1W' | '1M';
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('1W');
-  const FILTERS: { label: string; key: FilterKey; days: number }[] = [
-    { label: '1D', key: '1D', days: 1 },
-    { label: '3D', key: '3D', days: 3 },
-    { label: '5D', key: '5D', days: 5 },
-    { label: '1W', key: '1W', days: 7 },
-    { label: '1M', key: '1M', days: 30 },
-  ];
 
-  const fetchExpenses = async () => {
-    try {
-      const data = await api.get<Expense[]>('/api/expenses');
-      setExpenses(data);
-    } catch (error) {
-      console.error(error);
+  const today = toDayKey();
+
+  /**
+   * The window everything on this page measures.
+   *
+   * The active budget's period when there is one — that is the frame the reader
+   * has chosen. Otherwise the calendar month, which is the frame everyone
+   * defaults to when they haven't chosen.
+   */
+  const period = useMemo(() => {
+    if (activeBudget) {
+      return {
+        start: new Date(activeBudget.startDate).toISOString().slice(0, 10),
+        end: new Date(activeBudget.endDate).toISOString().slice(0, 10),
+      };
     }
-  };
+    const now = fromDayKey(today);
+    return { start: toDayKey(startOfMonth(now)), end: toDayKey(endOfMonth(now)) };
+  }, [activeBudget, today]);
 
-  const fetchActiveBudget = async () => {
-    try {
-      const data = await api.get<Budget[]>('/api/budgets');
-      const active = data.find(b => b.isActive);
-      setActiveBudget(active || null);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  const utilization = useMemo(
+    () => (activeBudget ? computeBudgetUtilization(activeBudget, expenses) : null),
+    [activeBudget, expenses]
+  );
 
-  useEffect(() => {
-    fetchExpenses();
-    fetchActiveBudget();
-  }, []);
+  const projection = useMemo(
+    () =>
+      projectPeriod({
+        expenses,
+        subscriptions,
+        startDay: period.start,
+        endDay: period.end,
+        today,
+        ...(utilization ? { planned: utilization.totals.allocated } : {}),
+        seed: activeBudget?._id ?? period.start,
+      }),
+    [expenses, subscriptions, period, today, utilization, activeBudget]
+  );
 
-  // Send the date as local noon so the stored UTC instant can't slip to the
-  // adjacent day for users far from UTC.
-  const toPayload = (values: ExpenseFormValues) => ({
-    amount: Number(values.amount),
-    category: values.category,
-    paymentMode: values.paymentMode,
-    description: values.description,
-    date: new Date(`${values.date}T12:00:00`).toISOString(),
-  });
+  const rhythm = useMemo(() => buildRhythm(expenses, { today }), [expenses, today]);
 
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.post('/api/expenses', toPayload(form));
-      setIsAddOpen(false);
-      resetForm();
-      fetchExpenses();
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  /**
+   * Unusual payments, floored at 2% of the period's plan.
+   *
+   * The floor is what makes this bearable rather than noisy: a ₹300 outlier in
+   * a coffee category is statistically extreme and humanly irrelevant, and an
+   * interface that flags it twice loses the right to be believed the third time.
+   */
+  const anomalies = useMemo(
+    () =>
+      findAnomalies(expenses, {
+        floor: (utilization?.totals.allocated ?? projection.expected) * 0.02,
+        limit: 2,
+        today,
+      }),
+    [expenses, utilization, projection.expected, today]
+  );
 
-  const handleEditExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editExpenseId) return;
-    try {
-      await api.put(`/api/expenses/${editExpenseId}`, toPayload(form));
-      setIsEditOpen(false);
-      resetForm();
-      fetchExpenses();
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  /** The next handful of scheduled charges, so nothing arrives as a surprise. */
+  const upcoming = projection.upcoming.slice(0, 4);
 
-  const confirmDeleteExpense = async () => {
-    if (!deleteId) return;
-    try {
-      await api.delete(`/api/expenses/${deleteId}`);
-      fetchExpenses();
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const openEditDialog = (expense: Expense) => {
-    setEditExpenseId(expense._id);
-    setForm({
-      amount: expense.amount.toString(),
-      category: expense.category,
-      paymentMode: expense.paymentMode,
-      description: expense.description || '',
-      date: toDateInputValue(expense.date),
-    });
-    setIsEditOpen(true);
-  };
-
-  const resetForm = () => {
-    setForm(emptyExpenseForm());
-    setEditExpenseId(null);
-  };
-
-  // Every section of the active budget measured against what's been recorded.
-  const budgetBreakdown = activeBudget ? computeBudgetUtilization(activeBudget, expenses) : null;
-
-  // The headline is labelled with the active budget's date range, so it has to
-  // be scoped to that range. Summing every expense ever recorded under a "Jul 1
-  // – Jul 31" label made a lifetime total read as one month's spending.
-  //
-  // It comes from the same computation as the two cards below, so the headline
-  // is always exactly budgeted spend + non-budgeted spend.
-  const totalExpense = budgetBreakdown
-    ? budgetBreakdown.totals.periodTotal
-    : expenses.reduce((acc, curr) => acc + curr.amount, 0);
-
-  // Spending recorded before the budget started or after it ended. The headline
-  // can't count it without contradicting its own date label, but dropping it
-  // silently makes money look lost — so it gets named, with a way to go see it.
-  const outsideBudget = (() => {
-    if (!activeBudget) return null;
-    const inPeriod = expensesInPeriod(activeBudget, expenses);
-    const count = expenses.length - inPeriod.length;
-    if (count === 0) return null;
-    return { count, total: expenses.reduce((sum, e) => sum + e.amount, 0) - totalExpense };
-  })();
+  const recent = useMemo(() => [...expenses].sort(byRecency).slice(0, 8), [expenses]);
 
   const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
     return 'Good evening';
   })();
 
-  // Filtered expenses for the Recent Transactions table
-  const filteredExpenses = (() => {
-    const days = FILTERS.find(f => f.key === activeFilter)?.days ?? 7;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    cutoff.setHours(0, 0, 0, 0);
-    return expenses.filter(e => new Date(e.date) >= cutoff).sort(byRecency);
-  })()
+  const removeExpense = async () => {
+    if (!deleteId) return;
+    try {
+      await api.delete(`/api/expenses/${deleteId}`);
+      reload();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (loading && !ready) {
+    return (
+      <Layout title="Home">
+        <div className="flex flex-col gap-5">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
+          <Skeleton className="h-40 w-full rounded-2xl" />
+        </div>
+      </Layout>
+    );
+  }
+
+  const empty = ready && expenses.length === 0;
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-6 sm:gap-8">
-        
-        {/* Hero */}
-        <div className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-hero p-6 sm:p-8 lg:p-10 animate-fade-up">
-          <div className="flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-foreground/80">{greeting}</p>
-              <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-foreground/50">
-                Total spent
-                {activeBudget && (
-                  <span className="text-foreground/40">
-                    {' · '}
-                    {new Date(activeBudget.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
-                    {new Date(activeBudget.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                )}
-              </p>
-              <h1 className="mt-1.5 text-[2.75rem] leading-none sm:text-6xl font-extrabold tracking-tighter tabular-nums">
-                {formatAmount(totalExpense)}
-              </h1>
-
-              {/* Says where the headline splits, so it never looks like the
-                  budget card below is under-counting. */}
-              {budgetBreakdown && budgetBreakdown.unbudgeted.total > 0 && (
-                <p className="mt-2.5 text-xs text-foreground/50 tabular-nums">
-                  {formatAmount(budgetBreakdown.totals.spent)} budgeted
-                  <span className="text-foreground/30"> · </span>
-                  {formatAmount(budgetBreakdown.unbudgeted.total)} not budgeted for
-                </p>
+    <Layout title="Home">
+      <div className="flex flex-col gap-5 sm:gap-6 min-w-0">
+        {/* ── Greeting ─────────────────────────────────────────────────── */}
+        <div className="min-w-0">
+          <div className="min-w-0">
+            <h1 className="text-title-1 sm:text-display">{greeting}</h1>
+            <p className="mt-1 text-subhead text-muted-foreground">
+              {formatDay(new Date(), { weekday: 'long', year: undefined })}
+              {activeBudget && (
+                <>
+                  {' · '}
+                  {formatDay(fromDayKey(period.start), { year: undefined })} –{' '}
+                  {formatDay(fromDayKey(period.end))}
+                </>
               )}
-
-              {outsideBudget && (
-                <p className="mt-1.5 text-xs text-foreground/40">
-                  <span className="tabular-nums">{formatAmount(outsideBudget.total)}</span> across{' '}
-                  <span className="tabular-nums">{outsideBudget.count}</span>{' '}
-                  {outsideBudget.count === 1 ? 'payment falls' : 'payments fall'} outside these dates
-                  <span className="text-foreground/25"> · </span>
-                  <Link to="/expenses" className="underline underline-offset-2 hover:text-foreground/70 transition-colors">
-                    see all expenses
-                  </Link>
-                </p>
-              )}
-            </div>
-
-            <div className="flex-shrink-0">
-              {/* Add Expense Dialog */}
-              <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if(!open) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button size="lg" className="w-full sm:w-auto px-7">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Expense
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Add New Expense</DialogTitle>
-                  </DialogHeader>
-                  <ExpenseForm values={form} onChange={patchForm} onSubmit={handleAddExpense} submitLabel="Save Expense" showShortcuts />
-                </DialogContent>
-              </Dialog>
-
-              {/* Edit dialog (opened programmatically) */}
-              <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if(!open) resetForm(); }}>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Edit Expense</DialogTitle>
-                  </DialogHeader>
-                  <ExpenseForm values={form} onChange={patchForm} onSubmit={handleEditExpense} submitLabel="Update Expense" />
-                </DialogContent>
-              </Dialog>
-            </div>
+            </p>
           </div>
         </div>
 
-        {/* Active Budget Utilization */}
-        {activeBudget && budgetBreakdown && (
-          <>
-            <BudgetUtilizationCard
-              startDate={activeBudget.startDate}
-              endDate={activeBudget.endDate}
-              sections={nonEmptySections(budgetBreakdown.sections)}
-              totals={budgetBreakdown.totals}
-            />
-            {/* The rest of the period's spending — what the budget never
-                planned for. Hidden entirely when there is none. */}
-            <NonBudgetedSpendsCard unbudgeted={budgetBreakdown.unbudgeted} budgetId={activeBudget._id} />
-          </>
+        {error && (
+          <p role="alert" className="rounded-xl bg-destructive-tint px-4 py-3 text-footnote text-destructive-text">
+            {error}
+          </p>
         )}
 
-        {/* Spending by Category */}
-        {/* Recent Transactions */}
-        <div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-            <h3 className="text-lg font-bold tracking-tight">Recent Transactions</h3>
-            <div className="flex gap-1.5 flex-wrap">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setActiveFilter(f.key)}
-                  className={cn(
-                    'rounded-lg h-11 md:h-9 px-4 text-xs font-semibold transition-all duration-150',
-                    activeFilter === f.key
-                      ? 'bg-foreground text-background shadow-sm'
-                      : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
+        {empty ? (
+          <EmptyState
+            icon={Receipt}
+            title="Nothing recorded yet"
+            body="Record one payment and this page starts working — a daily allowance, a projection, and where the money actually goes."
+            action={
+              <Button size="lg" onClick={() => openQuickAdd()}>
+                <Plus strokeWidth={2.5} />
+                Record your first payment
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            {/* ── The number ───────────────────────────────────────────── */}
+            <SafeToSpend
+              projection={projection}
+              planned={utilization ? utilization.totals.allocated : null}
+            />
 
-          {/* Desktop Table */}
-          <Card className="border shadow-sm bg-card rounded-2xl overflow-hidden hidden lg:block">
-            <Table>
-              <TableHeader className="bg-muted/30">
-                <TableRow className="border-b border-muted">
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider">Date</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider">Description</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider">Category</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider hidden xl:table-cell">Method</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Amount</TableHead>
-                  <TableHead className="font-semibold text-xs uppercase tracking-wider text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredExpenses.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No expenses in this period.</TableCell>
-                  </TableRow>
-                ) : (
-                  filteredExpenses.map((expense) => (
-                    <TableRow key={expense._id} className="border-b border-muted/50 hover:bg-muted/20 transition-colors">
-                      <TableCell className="font-medium text-muted-foreground whitespace-nowrap">
-                        {new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </TableCell>
-                      <TableCell className="font-semibold">{expense.description || expense.category}</TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
-                          {expense.category}
-                        </span>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell">
-                        <div className="flex items-center gap-2 text-muted-foreground whitespace-nowrap">
-                          {expense.paymentMode === 'Credit Card' ? <CreditCard className="w-4 h-4"/> : 
-                           expense.paymentMode === 'Cash' ? <Banknote className="w-4 h-4"/> : <Landmark className="w-4 h-4" />}
-                          <span className="text-sm">{expense.paymentMode}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-bold whitespace-nowrap">
-                        {formatAmount(expense.amount)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={() => openEditDialog(expense)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(expense._id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-
-          {/* Mobile Card List */}
-          <div className="lg:hidden space-y-3">
-            {filteredExpenses.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground rounded-2xl border bg-card">No expenses in this period.</div>
-            ) : (
-              filteredExpenses.map((expense) => (
-                <Card key={expense._id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{expense.description || expense.category}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </p>
-                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
-                          {expense.category}
-                        </span>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          {expense.paymentMode === 'Credit Card' ? <CreditCard className="w-3 h-3"/> :
-                           expense.paymentMode === 'Cash' ? <Banknote className="w-3 h-3"/> : <Landmark className="w-3 h-3" />}
-                          {expense.paymentMode}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="font-bold text-lg tabular-nums flex-shrink-0">{formatAmount(expense.amount)}</span>
+            {/* ── Anything unusual ─────────────────────────────────────── */}
+            {anomalies.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {anomalies.map(anomaly => (
+                  <div
+                    key={anomaly.id}
+                    className="flex items-center gap-3 rounded-xl border border-warning-border bg-warning-tint px-4 py-3 min-w-0"
+                  >
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-warning/15 text-warning-text">
+                      <Sparkles className="h-4 w-4" />
+                    </span>
+                    <p className="min-w-0 flex-1 text-footnote">
+                      <span className="font-semibold">
+                        {anomaly.expense.description || anomaly.expense.category}
+                      </span>{' '}
+                      <span className="text-muted-foreground">— {anomaly.reason}</span>
+                    </p>
+                    <span className="flex-shrink-0 text-subhead font-bold tnum text-warning-text">
+                      {formatRounded(anomaly.expense.amount)}
+                    </span>
                   </div>
-
-                  {/* Full-width, labelled actions — unmistakably tappable with a thumb. */}
-                  <div className="flex gap-2.5 mt-4 pt-3.5 border-t border-white/[0.06]">
-                    <Button
-                      variant="outline"
-                      className="flex-1 h-11 gap-2"
-                      onClick={() => openEditDialog(expense)}
-                    >
-                      <Pencil className="w-4 h-4" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1 h-11 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/40"
-                      onClick={() => setDeleteId(expense._id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </Button>
-                  </div>
-                </Card>
-              ))
+                ))}
+              </div>
             )}
-          </div>
-        </div>
 
+            {/* ── The judgement ────────────────────────────────────────── */}
+            <BriefCard />
+
+            {/* ── Where it is going, this period ───────────────────────── */}
+            {utilization && utilization.sections.some(s => s.items.length > 0) && (
+              <section className="rounded-2xl border border-border bg-card shadow-card p-5 sm:p-6 min-w-0">
+                <SectionHeader
+                  title="This period"
+                  subtitle={
+                    <span className="tnum">
+                      {formatRounded(utilization.totals.spent)} of{' '}
+                      {formatRounded(utilization.totals.allocated)} planned
+                    </span>
+                  }
+                  to="/plan"
+                  actionLabel="Forecast"
+                />
+
+                <ul className="mt-4 divide-y divide-border">
+                  {utilization.sections
+                    .flatMap(section => section.items.map(item => ({ ...item, section: section.key })))
+                    .sort((a, b) => b.spent - a.spent)
+                    .slice(0, 5)
+                    .map(item => (
+                      <li key={`${item.section}-${item.category}`} className="py-3 min-w-0">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 flex-1 truncate text-subhead font-medium">
+                            {item.category}
+                          </span>
+                          <span className="flex-shrink-0 text-subhead tnum">
+                            {formatRounded(item.spent)}
+                          </span>
+                          <span
+                            className={`w-12 flex-shrink-0 text-right text-footnote font-semibold tnum ${
+                              item.rawPercentage > 100 ? 'text-destructive-text' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {Math.round(item.rawPercentage)}%
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full transition-[width] duration-700 ease-spring"
+                            style={{
+                              width: `${Math.max(Math.min(item.percentage, 100), item.spent > 0 ? 2 : 0)}%`,
+                              // One measure, one hue. A per-category colour
+                              // here means a line at 100% can render in the
+                              // palette's coral and read as an error when it is
+                              // exactly on plan.
+                              backgroundColor:
+                                item.rawPercentage > 100
+                                  ? 'hsl(var(--destructive))'
+                                  : 'hsl(var(--primary))',
+                            }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            )}
+
+            {/* ── What is coming ───────────────────────────────────────── */}
+            {upcoming.length > 0 && (
+              <section className="rounded-2xl border border-border bg-card shadow-card p-5 sm:p-6 min-w-0">
+                <SectionHeader
+                  title="Coming up"
+                  subtitle={
+                    <span className="tnum">
+                      {formatRounded(projection.committedRemaining)} before{' '}
+                      {formatDay(fromDayKey(period.end), { year: undefined })}
+                    </span>
+                  }
+                  to="/subscriptions"
+                  actionLabel="All"
+                />
+
+                <ul className="mt-4 divide-y divide-border">
+                  {upcoming.map(charge => (
+                    <li
+                      key={`${charge.subscriptionId ?? charge.name}-${charge.day}`}
+                      className="flex items-center gap-3 py-2.5 min-w-0"
+                    >
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[0.65rem] bg-muted text-muted-foreground">
+                        <CalendarClock className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-subhead font-medium">{charge.name}</span>
+                        <span className="block text-caption text-muted-foreground">
+                          {formatDay(fromDayKey(charge.day), { year: undefined })}
+                        </span>
+                      </span>
+                      <span className="flex-shrink-0 text-subhead font-semibold tnum">
+                        {formatMoney(charge.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* ── The habit ────────────────────────────────────────────── */}
+            <RhythmCard rhythm={rhythm} />
+
+            {/* ── Recent ───────────────────────────────────────────────── */}
+            <section className="min-w-0">
+              <SectionHeader
+                title="Recent"
+                subtitle={`${expenses.length} payments recorded`}
+                to="/expenses"
+              />
+              <div className="mt-3 rounded-2xl border border-border bg-card shadow-card px-4 py-3 sm:px-5">
+                <ExpenseList expenses={recent} today={today} onOpen={setEditing} />
+              </div>
+            </section>
+
+            <div className="flex justify-center pt-1">
+              <Button variant="ghost" asChild>
+                <Link to="/expenses">
+                  See all activity
+                  <ArrowRight />
+                </Link>
+              </Button>
+            </div>
+          </>
+        )}
       </div>
+
+      <ExpenseEditDialog
+        expense={editing}
+        onOpenChange={open => { if (!open) setEditing(null); }}
+        onSaved={reload}
+        onDelete={setDeleteId}
+      />
 
       <DeleteConfirmDialog
         open={deleteId !== null}
         onOpenChange={open => { if (!open) setDeleteId(null); }}
-        title="Delete expense?"
-        description="This expense will be permanently removed."
-        onConfirm={confirmDeleteExpense}
+        title="Delete this payment?"
+        description="It will be removed permanently, and every total that includes it will change."
+        onConfirm={removeExpense}
       />
     </Layout>
   );
 }
+
+export { Badge };

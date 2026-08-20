@@ -30,16 +30,16 @@ export function DeleteConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] rounded-2xl">
+      <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-0 mt-2">
-          <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="mt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button variant="destructive" className="rounded-xl" onClick={handleConfirm}>
+          <Button variant="destructive" onClick={handleConfirm}>
             Delete
           </Button>
         </DialogFooter>

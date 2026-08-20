@@ -64,15 +64,15 @@ export function PaymentShortcuts({
   if (loading || shortcuts.length === 0) return null;
 
   return (
-    <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.02] p-2.5">
+    <div className="min-w-0 rounded-xl border border-border bg-subtle p-2.5">
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+        <span className="text-micro font-bold uppercase text-muted-foreground">
           Quick fill
         </span>
         <button
           type="button"
           onClick={() => setManaging(m => !m)}
-          className="flex-shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:bg-white/[0.06] transition-colors"
+          className="flex-shrink-0 rounded-lg px-2 py-1 text-micro font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           {managing ? 'Done' : 'Edit'}
         </button>
@@ -92,19 +92,19 @@ export function PaymentShortcuts({
               className={cn(
                 // h-11 on touch, tightening at md — the same tap-target scale
                 // the rest of the app uses.
-                'inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 h-11 md:h-9 text-xs transition-all duration-150 active:scale-[0.97]',
+                'inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 h-11 md:h-9 text-caption transition-all duration-150 active:scale-[0.97]',
                 managing
                   ? 'border-destructive/40 bg-destructive/10 hover:bg-destructive/20'
                   : isActive
                     ? 'border-primary/60 bg-primary/10'
-                    : 'border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.07]'
+                    : 'border-border bg-subtle hover:border-border-strong hover:bg-hover'
               )}
               aria-label={managing ? `Remove shortcut ${shortcut.label}` : `Use shortcut ${shortcut.label}`}
             >
               {managing && <X className="w-3 h-3 flex-shrink-0 text-destructive" />}
               {/* min-w-0 so a long label truncates instead of widening the pill. */}
               <span className="min-w-0 truncate font-semibold">{shortcut.label}</span>
-              <span className="flex-shrink-0 tabular-nums text-muted-foreground">
+              <span className="flex-shrink-0 tnum text-muted-foreground">
                 {formatAmount(shortcut.amount)}
               </span>
             </button>

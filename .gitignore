@@ -33,3 +33,6 @@ pnpm-debug.log*
 
 # Platform
 .vercel
+
+# Scenario evaluation output — transcripts and reports, regenerated on demand.
+backend/evals/

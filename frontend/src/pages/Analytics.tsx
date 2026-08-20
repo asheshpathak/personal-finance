@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Area,
   Bar,
@@ -12,15 +12,16 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { ChartPie, Lightbulb } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
-import { Card } from '@/components/ui/card';
-import { Lightbulb } from 'lucide-react';
+import { EmptyState, PageHeader, SectionHeader, Skeleton } from '@/components/ui/section';
+import { Stat, StatRow, Delta } from '@/components/ui/stat';
 import { cn } from '@/lib/utils';
-import { api } from '@/lib/api';
 import { useCurrency } from '@/context/CurrencyContext';
+import { useFinances } from '@/lib/useFinances';
 import { AnalyticsFilterBar } from '@/components/analytics/AnalyticsFilterBar';
-import { ChangeBadge } from '@/components/analytics/ChangeBadge';
 import { ChartCard } from '@/components/analytics/ChartCard';
+import { SankeyFlow } from '@/components/analytics/SankeyFlow';
 import {
   analyze,
   defaultFilters,
@@ -35,44 +36,29 @@ import {
   COMPARISON,
   GRID,
   PRIMARY,
+  SURFACE,
   TOOLTIP_ITEM_STYLE,
   TOOLTIP_LABEL_STYLE,
   TOOLTIP_STYLE,
   categoricalColor,
+  colorForName,
 } from '@/lib/chartTheme';
 
 /** How many category rows the bar chart shows before folding the rest into Other. */
 const CATEGORY_ROWS = 10;
 
-/** Surface colour behind the charts — used to cut the 2px gaps in stacked fills. */
-const SURFACE = 'hsl(250 20% 9%)';
-
 export default function Analytics() {
-  const { formatAmount, currencySymbol } = useCurrency();
+  const { formatAmount, formatMoney, formatRounded, formatCompact } = useCurrency();
+  const { expenses, activeBudget, loading, ready } = useFinances({ subscriptions: false });
 
-  const [expenses, setExpenses] = useState<AnalyticsExpense[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<AnalyticsFilters>(defaultFilters);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const data = await api.get<AnalyticsExpense[]>('/api/expenses');
-        if (!cancelled) setExpenses(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  const result = useMemo(() => analyze(expenses, filters, formatAmount), [expenses, filters, formatAmount]);
+  const result = useMemo(
+    // Rounded, not exact: these figures land inside sentences, where the
+    // decimals are noise rather than precision.
+    () => analyze(expenses as AnalyticsExpense[], filters, formatRounded),
+    [expenses, filters, formatRounded]
+  );
 
   // Filter options come from the data, ranked by how much they're used, so the
   // chips a reader wants are the ones they see first.
@@ -87,10 +73,6 @@ export default function Analytics() {
       [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
     return { categoryOptions: rank(byCategory), paymentModeOptions: rank(byMode) };
   }, [expenses]);
-
-  /** Axis ticks need to stay short — the tooltip and table carry exact figures. */
-  const compact = (value: number) =>
-    `${currencySymbol}${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(value)}`;
 
   const categoryRows = useMemo(() => {
     const shown = result.categories.slice(0, CATEGORY_ROWS);
@@ -112,22 +94,47 @@ export default function Analytics() {
   }, [result.categories]);
 
   const peak = useMemo(
-    () => result.trend.reduce<{ label: string; current: number } | null>(
-      (best, point) => (best === null || point.current > best.current ? point : best),
-      null
-    ),
+    () =>
+      result.trend.reduce<{ label: string; current: number } | null>(
+        (best, point) => (best === null || point.current > best.current ? point : best),
+        null
+      ),
     [result.trend]
   );
 
   const busiestWeekday = useMemo(
-    () => result.weekdays.reduce((best, day) => (day.average > best.average ? day : best), result.weekdays[0]),
+    () => result.weekdays.reduce((best, day) => (day.average > best.average ? day : best), result.weekdays[0]!),
     [result.weekdays]
   );
 
-  if (loading) {
+  /** The Sankey uses the *filtered* slice, so it always agrees with the page. */
+  const flowIncome = useMemo(() => {
+    if (!activeBudget?.income) return 0;
+    // Income is stated per budget period; the analytics range is arbitrary. So
+    // it is prorated to the range rather than shown whole, which would make the
+    // "left over" ribbon a fiction whenever the two windows differ.
+    const budgetDays = Math.max(
+      1,
+      Math.round(
+        (new Date(activeBudget.endDate).getTime() - new Date(activeBudget.startDate).getTime()) /
+          86_400_000
+      ) + 1
+    );
+    const rangeDays = Math.max(
+      1,
+      Math.round((result.range.end.getTime() - result.range.start.getTime()) / 86_400_000) + 1
+    );
+    return (activeBudget.income / budgetDays) * rangeDays;
+  }, [activeBudget, result.range]);
+
+  if (loading && !ready) {
     return (
-      <Layout>
-        <div className="py-12 text-center text-muted-foreground">Loading analytics…</div>
+      <Layout title="Insights" wide>
+        <div className="flex flex-col gap-5">
+          <Skeleton className="h-9 w-40" />
+          <Skeleton className="h-20 w-full rounded-2xl" />
+          <Skeleton className="h-80 w-full rounded-2xl" />
+        </div>
       </Layout>
     );
   }
@@ -135,14 +142,17 @@ export default function Analytics() {
   const isEmpty = result.expenses.length === 0;
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-5 sm:gap-6 min-w-0">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tighter">Analytics</h1>
-          <p className="text-muted-foreground mt-1">
-            {formatRange(result.range)} · compared with the {formatRange(result.previousRange)} before it.
-          </p>
-        </div>
+    <Layout title="Insights" wide>
+      <div className="flex flex-col gap-5 min-w-0">
+        <PageHeader
+          title="Insights"
+          lede={
+            <>
+              {formatRange(result.range)} · compared with the {formatRange(result.previousRange)}{' '}
+              before it.
+            </>
+          }
+        />
 
         <AnalyticsFilterBar
           filters={filters}
@@ -153,31 +163,30 @@ export default function Analytics() {
         />
 
         {isEmpty ? (
-          <Card className="rounded-2xl p-10 text-center">
-            <p className="font-semibold">No payments in this selection.</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Widen the period or clear a filter to see your spending.
-            </p>
-          </Card>
+          <EmptyState
+            icon={ChartPie}
+            title="Nothing in this selection"
+            body="Widen the period or clear a filter to see your spending."
+          />
         ) : (
           <>
-            {/* ── Insights ─────────────────────────────────────────────── */}
+            {/* ── What stands out ──────────────────────────────────────── */}
             {result.insights.length > 0 && (
-              <Card className="rounded-2xl border shadow-sm p-4 sm:p-5 min-w-0">
-                <p className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground mb-3">
-                  <Lightbulb className="w-3.5 h-3.5" />
+              <section className="rounded-2xl border border-border bg-card shadow-card p-5 sm:p-6 min-w-0">
+                <p className="inline-flex items-center gap-1.5 text-overline uppercase text-faint">
+                  <Lightbulb className="h-3.5 w-3.5" />
                   What stands out
                 </p>
-                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
+                <ul className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
                   {result.insights.map(insight => (
-                    <li key={insight.id} className="flex gap-2 text-sm min-w-0">
+                    <li key={insight.id} className="flex gap-2.5 text-subhead min-w-0">
                       <span
                         className={cn(
-                          'mt-1.5 h-1.5 w-1.5 rounded-full flex-shrink-0',
+                          'mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full',
                           insight.tone === 'up'
                             ? 'bg-destructive'
                             : insight.tone === 'down'
-                              ? 'bg-success'
+                              ? 'bg-positive'
                               : 'bg-primary'
                         )}
                         aria-hidden="true"
@@ -189,39 +198,47 @@ export default function Analytics() {
                     </li>
                   ))}
                 </ul>
-              </Card>
+              </section>
             )}
 
-            {/* ── KPI row ──────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              {result.kpis.map(kpi => (
-                <Card key={kpi.label} className="rounded-2xl p-4 sm:p-5 min-w-0">
-                  <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground truncate">
-                    {kpi.label}
-                  </p>
-                  {/* Proportional figures: tabular-nums makes a headline number
-                      look loose at this size. */}
-                  <p className="mt-1.5 text-lg sm:text-xl lg:text-2xl font-extrabold tracking-tight break-words">
-                    {kpi.format === 'currency' ? formatAmount(kpi.value) : Math.round(kpi.value)}
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <ChangeBadge delta={kpi.delta} />
-                    <span className="text-[11px] text-muted-foreground truncate">{kpi.hint}</span>
-                  </div>
-                </Card>
-              ))}
+            {/* ── The numbers ──────────────────────────────────────────── */}
+            <div className="rounded-2xl border border-border bg-card shadow-card p-5 min-w-0">
+              <StatRow>
+                {result.kpis.map(kpi => (
+                  <Stat
+                    key={kpi.label}
+                    label={kpi.label}
+                    value={kpi.format === 'currency' ? formatRounded(kpi.value) : Math.round(kpi.value)}
+                    hint={
+                      <span className="flex flex-wrap items-center gap-x-2">
+                        <Delta value={kpi.delta} />
+                        <span className="truncate">{kpi.hint}</span>
+                      </span>
+                    }
+                  />
+                ))}
+              </StatRow>
             </div>
+
+            {/* ── Where it went ────────────────────────────────────────── */}
+            <section className="rounded-2xl border border-border bg-card shadow-card p-5 sm:p-6 min-w-0">
+              <SectionHeader
+                title="Where the money went"
+                subtitle="Income splits into what was kept and what was spent"
+              />
+              <SankeyFlow className="mt-5" expenses={result.expenses} income={flowIncome} />
+            </section>
 
             {/* ── Trend ────────────────────────────────────────────────── */}
             <ChartCard
               title="Spending over time"
               subtitle={
                 peak && peak.current > 0
-                  ? `Per ${result.granularity} · peak ${peak.label} at ${formatAmount(peak.current)}`
+                  ? `Per ${result.granularity} · peak ${peak.label} at ${formatRounded(peak.current)}`
                   : `Per ${result.granularity}`
               }
               action={
-                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <div className="flex items-center gap-3 text-caption text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: PRIMARY }} aria-hidden="true" />
                     This period
@@ -244,13 +261,13 @@ export default function Analytics() {
                 { header: 'Running total', numeric: true, cell: r => formatAmount(r.cumulative) },
               ]}
             >
-              <div className="h-[260px] sm:h-[300px] w-full min-w-0">
+              <div className="h-[260px] w-full min-w-0 sm:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={result.trend} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={PRIMARY} stopOpacity={0.35} />
-                        <stop offset="100%" stopColor={PRIMARY} stopOpacity={0.02} />
+                        <stop offset="0%" stopColor={PRIMARY} stopOpacity={0.22} />
+                        <stop offset="100%" stopColor={PRIMARY} stopOpacity={0.01} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid stroke={GRID} strokeWidth={1} vertical={false} />
@@ -265,8 +282,8 @@ export default function Analytics() {
                       tick={{ fill: AXIS_TEXT, fontSize: 11 }}
                       tickLine={false}
                       axisLine={false}
-                      width={52}
-                      tickFormatter={compact}
+                      width={56}
+                      tickFormatter={value => formatCompact(Number(value))}
                     />
                     <Tooltip
                       cursor={{ stroke: GRID, strokeWidth: 1 }}
@@ -293,7 +310,7 @@ export default function Analytics() {
                       dataKey="current"
                       name="This period"
                       stroke={PRIMARY}
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       fill="url(#trendFill)"
                       dot={false}
                       activeDot={{ r: 4, strokeWidth: 2, stroke: SURFACE }}
@@ -306,7 +323,7 @@ export default function Analytics() {
 
             {/* ── Categories ───────────────────────────────────────────── */}
             <ChartCard
-              title="Where the money went"
+              title="By category"
               subtitle={`${result.categories.length} categories · ranked by spend`}
               rows={result.categories}
               columns={[
@@ -314,19 +331,16 @@ export default function Analytics() {
                 { header: 'Spent', numeric: true, cell: r => formatAmount(r.amount) },
                 { header: 'Share', numeric: true, cell: r => `${r.share.toFixed(1)}%` },
                 { header: 'Payments', numeric: true, cell: r => r.transactions },
-                { header: 'vs previous', numeric: true, cell: r => <ChangeBadge delta={r.delta} className="justify-end" /> },
+                { header: 'vs previous', numeric: true, cell: r => <Delta value={r.delta} className="justify-end" /> },
               ]}
             >
-              <div
-                className="w-full min-w-0"
-                style={{ height: Math.max(200, categoryRows.length * 34 + 24) }}
-              >
+              <div className="w-full min-w-0" style={{ height: Math.max(200, categoryRows.length * 36 + 24) }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={categoryRows}
                     layout="vertical"
-                    margin={{ top: 0, right: 12, bottom: 0, left: 0 }}
-                    barCategoryGap={6}
+                    margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
+                    barCategoryGap={7}
                   >
                     <CartesianGrid stroke={GRID} strokeWidth={1} horizontal={false} />
                     <XAxis
@@ -334,11 +348,8 @@ export default function Analytics() {
                       tick={{ fill: AXIS_TEXT, fontSize: 11 }}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={compact}
+                      tickFormatter={value => formatCompact(Number(value))}
                     />
-                    {/* The category name on every row is the identity channel —
-                        one hue for every bar, because length already encodes the
-                        magnitude and a value-ramp would double-encode it. */}
                     <YAxis
                       type="category"
                       dataKey="category"
@@ -349,19 +360,26 @@ export default function Analytics() {
                       interval={0}
                     />
                     <Tooltip
-                      cursor={{ fill: 'hsl(255 100% 69% / 0.08)' }}
+                      cursor={{ fill: 'hsl(238 80% 62% / 0.06)' }}
                       contentStyle={TOOLTIP_STYLE}
                       itemStyle={TOOLTIP_ITEM_STYLE}
                       labelStyle={TOOLTIP_LABEL_STYLE}
-                      formatter={(value) => [formatAmount(Number(value ?? 0)), 'Spent']}
+                      formatter={value => [formatAmount(Number(value ?? 0)), 'Spent']}
                     />
-                    <Bar dataKey="amount" fill={PRIMARY} radius={[0, 4, 4, 0]} maxBarSize={18} isAnimationActive={false} />
+                    {/* One hue per *category name*, so a category keeps its
+                        colour across every chart on the page even as the
+                        ranking shifts underneath it. */}
+                    <Bar dataKey="amount" radius={[0, 5, 5, 0]} maxBarSize={20} isAnimationActive={false}>
+                      {categoryRows.map(row => (
+                        <Cell key={row.category} fill={colorForName(row.category)} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </ChartCard>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 min-w-0">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 min-w-0">
               {/* ── Payment mix — a composition bar, not a pie ──────────── */}
               <ChartCard
                 title="How you paid"
@@ -389,17 +407,17 @@ export default function Analytics() {
 
                   <ul className="space-y-2.5">
                     {result.paymentModes.slice(0, 8).map((slice, i) => (
-                      <li key={slice.name} className="flex items-center gap-2.5 text-sm min-w-0">
+                      <li key={slice.name} className="flex items-center gap-2.5 text-subhead min-w-0">
                         <span
-                          className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                          className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
                           style={{ backgroundColor: categoricalColor(i) }}
                           aria-hidden="true"
                         />
                         <span className="truncate">{slice.name}</span>
-                        <span className="ml-auto flex-shrink-0 tabular-nums text-muted-foreground">
-                          {formatAmount(slice.amount)}
+                        <span className="ml-auto flex-shrink-0 tnum text-muted-foreground">
+                          {formatMoney(slice.amount)}
                         </span>
-                        <span className="w-12 flex-shrink-0 text-right tabular-nums font-semibold">
+                        <span className="w-12 flex-shrink-0 text-right tnum font-semibold">
                           {slice.share.toFixed(0)}%
                         </span>
                       </li>
@@ -407,18 +425,16 @@ export default function Analytics() {
                   </ul>
 
                   {result.groups.length > 1 && (
-                    <div className="pt-3 border-t border-white/[0.06]">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground mb-2">
-                        By type
-                      </p>
+                    <div className="border-t border-border pt-3">
+                      <p className="text-overline uppercase text-faint mb-2">By type</p>
                       <ul className="space-y-1.5">
                         {result.groups.map(group => (
-                          <li key={group.name} className="flex items-center gap-2 text-sm">
+                          <li key={group.name} className="flex items-center gap-2 text-subhead">
                             <span className="text-muted-foreground">
                               {CATEGORY_GROUP_LABELS[group.name as CategoryGroup] ?? group.name}
                             </span>
-                            <span className="ml-auto tabular-nums">{formatAmount(group.amount)}</span>
-                            <span className="w-12 text-right tabular-nums font-semibold">
+                            <span className="ml-auto tnum">{formatMoney(group.amount)}</span>
+                            <span className="w-12 text-right tnum font-semibold">
                               {group.share.toFixed(0)}%
                             </span>
                           </li>
@@ -459,24 +475,24 @@ export default function Analytics() {
                         tick={{ fill: AXIS_TEXT, fontSize: 11 }}
                         tickLine={false}
                         axisLine={false}
-                        width={52}
-                        tickFormatter={compact}
+                        width={56}
+                        tickFormatter={value => formatCompact(Number(value))}
                       />
                       <Tooltip
-                        cursor={{ fill: 'hsl(255 100% 69% / 0.08)' }}
+                        cursor={{ fill: 'hsl(238 80% 62% / 0.06)' }}
                         contentStyle={TOOLTIP_STYLE}
                         itemStyle={TOOLTIP_ITEM_STYLE}
                         labelStyle={TOOLTIP_LABEL_STYLE}
-                        formatter={(value) => [formatAmount(Number(value ?? 0)), 'Average']}
+                        formatter={value => [formatAmount(Number(value ?? 0)), 'Average']}
                       />
                       {/* Emphasis, not categorical: the heaviest day is the
                           point, the rest are context. */}
-                      <Bar dataKey="average" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false}>
+                      <Bar dataKey="average" radius={[5, 5, 0, 0]} maxBarSize={44} isAnimationActive={false}>
                         {result.weekdays.map(day => (
                           <Cell
                             key={day.day}
                             fill={PRIMARY}
-                            fillOpacity={busiestWeekday && day.day === busiestWeekday.day ? 1 : 0.42}
+                            fillOpacity={busiestWeekday && day.day === busiestWeekday.day ? 1 : 0.28}
                           />
                         ))}
                       </Bar>
@@ -487,32 +503,38 @@ export default function Analytics() {
             </div>
 
             {/* ── Largest single payments ──────────────────────────────── */}
-            <Card className="rounded-2xl border shadow-sm p-4 sm:p-6 min-w-0">
-              <h2 className="text-base font-bold tracking-tight">Largest payments</h2>
-              <p className="text-xs text-muted-foreground mt-0.5 mb-4">
-                The biggest single entries in this period
-              </p>
-              <ul className="divide-y divide-white/[0.05]">
+            <section className="rounded-2xl border border-border bg-card shadow-card p-5 sm:p-6 min-w-0">
+              <SectionHeader title="Largest payments" subtitle="The biggest single entries in this period" />
+              <ul className="mt-4 divide-y divide-border">
                 {result.topExpenses.map(expense => (
                   <li key={expense._id} className="flex items-center gap-3 py-2.5 min-w-0">
+                    <span
+                      aria-hidden="true"
+                      className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                      style={{ backgroundColor: colorForName(expense.category) }}
+                    />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">
+                      <span className="block truncate text-subhead font-medium">
                         {expense.description || expense.category}
                       </span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {new Date(expense.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      <span className="block truncate text-caption text-muted-foreground">
+                        {new Date(expense.date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
                         {' · '}
                         {expense.category}
                         {expense.paymentMode ? ` · ${expense.paymentMode}` : ''}
                       </span>
                     </span>
-                    <span className="flex-shrink-0 text-sm font-bold tabular-nums">
-                      {formatAmount(expense.amount)}
+                    <span className="flex-shrink-0 text-subhead font-semibold tnum">
+                      {formatMoney(expense.amount)}
                     </span>
                   </li>
                 ))}
               </ul>
-            </Card>
+            </section>
           </>
         )}
       </div>
