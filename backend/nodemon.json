@@ -1,0 +1,15 @@
+{
+  "//": [
+    "nodemon's default watch covers .ts and .json under the working directory, which",
+    "silently excludes .env — and dotenv only reads the file once, at import time.",
+    "So editing a secret in development appears to do nothing: the file changes, the",
+    "server keeps running with the old environment, and the app keeps reporting the",
+    "feature as unconfigured. Watching .env explicitly is the fix.",
+    "",
+    "No `exec` here on purpose — `npm run dev` passes the entry point, and setting",
+    "both makes nodemon append one to the other."
+  ],
+  "watch": ["src", ".env"],
+  "ext": "ts,json,env",
+  "ignore": ["dist", "node_modules"]
+}

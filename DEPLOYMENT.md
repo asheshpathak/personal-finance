@@ -45,12 +45,42 @@ Set these service variables:
 | `NODE_ENV` | `production` |
 | `CORS_ORIGINS` | *(leave empty for now — fill in after step 3)* |
 | `NPM_CONFIG_PRODUCTION` | `false` |
+| `ANTHROPIC_API_KEY` | *(optional — see below)* |
 
 Do **not** set `PORT`; Railway injects it and the server reads it.
 
 `NPM_CONFIG_PRODUCTION=false` is required because the build runs `tsc`, which lives in
 `devDependencies`. With the default production setting npm omits those and the build
 fails with `tsc: not found`. It only affects the build image, not what runs.
+
+### AI features are optional
+
+`ANTHROPIC_API_KEY` switches on natural-language capture, the briefing on Home, the
+budget reviewer and Ask Tetra. Leave it unset and every one of those surfaces hides
+itself — the app has no degraded mode, no disabled buttons and no error states from
+the absence. Everything else works exactly the same.
+
+The key is read **server-side only**. It must never be given to the frontend: Vite
+inlines any `VITE_`-prefixed value into the browser bundle, so a key handed to the
+client is a key published on the internet. Every AI call in this app goes through the
+Express server, authenticated by the same JWT as `/api/expenses`.
+
+Two related knobs, both optional:
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `ANTHROPIC_MODEL` | `claude-sonnet-5` | Pinned in config so an upgrade is deliberate |
+| `AI_REQUESTS_PER_HOUR` | `60` | Per-account ceiling, to bound the bill if a client loops |
+
+Sonnet 5 is the default rather than Opus: roughly 2.5x cheaper per token in both
+directions, and it spends far less thinking on its way to an answer. Nothing this
+app asks is a hard reasoning problem.
+
+Do **not** drop to `claude-haiku-4-5` without checking the cache floor. Its
+minimum cacheable prefix is 4,096 tokens against Sonnet's 1,024; a smaller
+financial context would fall under it and silently never cache — no error,
+`cache_creation_input_tokens` simply stays 0 — and every request would then pay
+full price for the whole prefix. The cheaper model would cost more.
 
 Then **Settings → Networking → Generate Domain** to get a public URL. Verify:
 

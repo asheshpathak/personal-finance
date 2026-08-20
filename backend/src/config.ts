@@ -43,4 +43,37 @@ export const config = {
     .split(',')
     .map(origin => origin.trim())
     .filter(Boolean),
+
+  // ── Claude / Anthropic ────────────────────────────────────────────────────
+  /**
+   * Server-side key for the Claude API. Optional: without it every AI route
+   * answers 503 with a clear message and the client hides the AI surfaces
+   * entirely, so the rest of the app is unaffected.
+   *
+   * Never exposed to the browser — the frontend only ever talks to this server.
+   */
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
+
+  /**
+   * Model used for every AI feature.
+   *
+   * Sonnet 5 rather than Opus 5: it is roughly 2.5x cheaper per token in both
+   * directions and, more to the point for this app, it thinks less on its way
+   * to an answer. Nothing here is a hard reasoning problem — reading a line of
+   * text into an expense, ranking a handful of findings, looking up a total —
+   * so the extra deliberation was being paid for and not used.
+   *
+   * **Do not drop to Haiku 4.5 without reading this.** Its minimum cacheable
+   * prefix is 4,096 tokens against Sonnet's 1,024, and a smaller financial
+   * context would fall under that floor and silently never cache — no error,
+   * `cache_creation_input_tokens` simply stays 0 and every request pays full
+   * price for the whole prefix. The cheaper model would cost more.
+   */
+  anthropicModel: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5',
+
+  /**
+   * Per-account ceiling on AI calls per rolling hour. This is a personal app,
+   * so the limit exists to bound the bill if a client loops, not to ration.
+   */
+  aiRequestsPerHour: Number(process.env.AI_REQUESTS_PER_HOUR) || 60,
 };

@@ -1,11 +1,12 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { api, getToken } from '@/lib/api';
 import {
   isCurrency,
   readCachedCurrency,
   writeCachedCurrency,
   type Currency,
 } from '@/lib/currencyCache';
+import * as money from '@/lib/money';
 
 export type { Currency };
 
@@ -13,7 +14,18 @@ interface CurrencyContextType {
   currency: Currency;
   /** Persists to the account. Rejects (and reverts) if the save fails. */
   setCurrency: (c: Currency) => Promise<void>;
+  /** Exact, two decimals. For ledgers and anything a person could check. */
   formatAmount: (amount: number) => string;
+  /** No decimals. For stat tiles, headlines and summaries. */
+  formatRounded: (amount: number) => string;
+  /** Decimals only when non-zero. The right default for list rows and chips. */
+  formatMoney: (amount: number) => string;
+  /** `₹1.2L` / `$12.3K`. For axis ticks and dense labels. */
+  formatCompact: (amount: number) => string;
+  /** Always signed. For a change against a baseline. */
+  formatDelta: (amount: number) => string;
+  /** Symbol and digits apart, so a hero figure can set them differently. */
+  formatParts: (amount: number) => { symbol: string; digits: string };
   currencySymbol: string;
 }
 
@@ -25,7 +37,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   // Pull the stored preference for this account. This is what makes a fresh
   // browser or a second device show the right currency without being told.
   useEffect(() => {
-    if (!localStorage.getItem('token')) return;
+    if (!getToken()) return;
     let cancelled = false;
 
     api
@@ -53,38 +65,45 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  const setCurrency = async (next: Currency) => {
-    const previous = currency;
-    // Optimistic: the whole app reformats immediately, and rolls back if the
-    // account update doesn't land.
-    setCurrencyState(next);
-    writeCachedCurrency(next);
+  const setCurrency = useCallback(
+    async (next: Currency) => {
+      const previous = currency;
+      // Optimistic: the whole app reformats immediately, and rolls back if the
+      // account update doesn't land.
+      setCurrencyState(next);
+      writeCachedCurrency(next);
 
-    try {
-      await api.put('/api/auth/preferences', { currency: next });
-    } catch (err) {
-      setCurrencyState(previous);
-      writeCachedCurrency(previous);
-      throw err;
-    }
-  };
-
-  const currencySymbol = currency === 'INR' ? '₹' : '$';
-
-  const formatAmount = (amount: number): string => {
-    return new Intl.NumberFormat(currency === 'INR' ? 'en-IN' : 'en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  return (
-    <CurrencyContext.Provider value={{ currency, setCurrency, formatAmount, currencySymbol }}>
-      {children}
-    </CurrencyContext.Provider>
+      try {
+        await api.put('/api/auth/preferences', { currency: next });
+      } catch (err) {
+        setCurrencyState(previous);
+        writeCachedCurrency(previous);
+        throw err;
+      }
+    },
+    [currency]
   );
+
+  // Memoised on the currency alone. Every formatter below is referentially
+  // stable across renders, which matters more than it looks: several pages pass
+  // `formatAmount` into a `useMemo` dependency array, and a new function
+  // identity every render would recompute an entire analytics pass per keystroke.
+  const value = useMemo<CurrencyContextType>(
+    () => ({
+      currency,
+      setCurrency,
+      formatAmount: (amount: number) => money.exact(amount, currency),
+      formatRounded: (amount: number) => money.rounded(amount, currency),
+      formatMoney: (amount: number) => money.smart(amount, currency),
+      formatCompact: (amount: number) => money.compact(amount, currency),
+      formatDelta: (amount: number) => money.delta(amount, currency),
+      formatParts: (amount: number) => money.parts(amount, currency),
+      currencySymbol: money.symbolFor(currency),
+    }),
+    [currency, setCurrency]
+  );
+
+  return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
 }
 
 export function useCurrency() {

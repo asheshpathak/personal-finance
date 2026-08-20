@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { SlidersHorizontal, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { SlidersHorizontal, X, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SegmentedButton } from '@/components/ui/segmented';
+import { DateRangePicker } from '@/components/ui/date-picker';
 import { PERIOD_PRESETS, type AnalyticsFilters } from '@/lib/analytics';
 import { CATEGORY_GROUP_LABELS, type CategoryGroup } from '@/lib/expenseCategories';
 
@@ -11,35 +11,16 @@ function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter(v => v !== value) : [...list, value];
 }
 
-function Chip({
-  label,
-  selected,
-  onClick,
-}: {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        'rounded-full border px-3 h-11 md:h-8 text-xs font-semibold transition-colors',
-        selected
-          ? 'border-primary/60 bg-primary/15 text-foreground'
-          : 'border-white/10 bg-white/[0.04] text-muted-foreground hover:text-foreground hover:border-white/20'
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
 /**
  * One filter row above everything it scopes — every chart, stat and table on the
  * page reads the same slice, so the numbers can never disagree.
+ *
+ * The layout is deliberately two *rows*, not one wrapping flex line. The old
+ * version put the presets and the Filters button in a single `flex-wrap` with
+ * `ml-auto` on the button: as soon as the presets wrapped, the button dropped
+ * onto its own line and `ml-auto` shoved it to the far right, leaving a wide
+ * ragged gap where a button group should be. Giving the actions their own row
+ * means the group is aligned at every width instead of only the wide ones.
  */
 export function AnalyticsFilterBar({
   filters,
@@ -62,83 +43,109 @@ export function AnalyticsFilterBar({
   const activeCount =
     filters.categories.length + filters.paymentModes.length + filters.groups.length;
 
+  const presets = PERIOD_PRESETS.filter(p => p.key !== 'CUSTOM');
+
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 sm:p-4 min-w-0">
-      {/* Date range first — it's the control every reader reaches for. */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {PERIOD_PRESETS.map(preset => (
-          <Chip
+    <div className="rounded-2xl border border-border bg-subtle p-3 sm:p-4 min-w-0">
+      {/* Row 1 — period. The control every reader reaches for first. */}
+      <div
+        role="group"
+        aria-label="Period"
+        className="scroll-x no-scrollbar -mx-1 flex items-center gap-1.5 px-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+      >
+        {presets.map(preset => (
+          <SegmentedButton
             key={preset.key}
-            label={preset.label}
             selected={filters.period === preset.key}
             onClick={() => patch({ period: preset.key })}
-          />
+          >
+            {preset.label}
+          </SegmentedButton>
         ))}
 
+        {/* Custom sits in the same row and opens the app's own range calendar
+            rather than two native date inputs. */}
+        <DateRangePicker
+          value={{ from: filters.customStart, to: filters.customEnd }}
+          onChange={range =>
+            patch({ period: 'CUSTOM', customStart: range.from, customEnd: range.to })
+          }
+          placeholder="Custom"
+          renderTrigger={({ label, hasValue }) => (
+            <SegmentedButton selected={filters.period === 'CUSTOM'} className="max-w-[16rem]">
+              <span className="truncate">
+                {filters.period === 'CUSTOM' && hasValue ? label : 'Custom'}
+              </span>
+              <ChevronDown className="h-3 w-3 flex-shrink-0 opacity-60" />
+            </SegmentedButton>
+          )}
+        />
+      </div>
+
+      {/* Row 2 — actions and result count. Its own row, so nothing here can be
+          knocked out of alignment by how many presets happened to fit above. */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border pt-3">
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
           aria-expanded={open}
           className={cn(
-            'ml-auto inline-flex items-center gap-1.5 rounded-full border px-3 h-11 md:h-8 text-xs font-semibold transition-colors',
-            activeCount > 0
+            'tactile inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 h-11 md:h-9 text-caption font-semibold',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+            activeCount > 0 || open
               ? 'border-primary/60 bg-primary/15 text-foreground'
-              : 'border-white/10 bg-white/[0.04] text-muted-foreground hover:text-foreground'
+              : 'border-border bg-subtle text-muted-foreground hover:border-border-strong hover:text-foreground'
           )}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filters
           {activeCount > 0 && (
-            <span className="rounded-full bg-primary/30 px-1.5 tabular-nums">{activeCount}</span>
+            <span className="rounded-full bg-primary/30 px-1.5 tnum">{activeCount}</span>
           )}
         </button>
+
+        {activeCount > 0 && (
+          <button
+            type="button"
+            onClick={() => patch({ categories: [], paymentModes: [], groups: [] })}
+            className="tactile inline-flex flex-shrink-0 items-center gap-1 rounded-lg px-2 h-9 text-caption font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="w-3 h-3" />
+            Clear
+          </button>
+        )}
+
+        <span className="ml-auto flex-shrink-0 text-caption tnum text-muted-foreground">
+          {resultCount} {resultCount === 1 ? 'payment' : 'payments'} in view
+        </span>
       </div>
 
-      {filters.period === 'CUSTOM' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-white/[0.06]">
-          <div className="space-y-1.5">
-            <Label htmlFor="analytics-from" className="text-xs text-muted-foreground">From</Label>
-            <Input
-              id="analytics-from"
-              type="date"
-              value={filters.customStart}
-              onChange={e => patch({ customStart: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="analytics-to" className="text-xs text-muted-foreground">To</Label>
-            <Input
-              id="analytics-to"
-              type="date"
-              value={filters.customEnd}
-              onChange={e => patch({ customEnd: e.target.value })}
-            />
-          </div>
-        </div>
-      )}
-
       {open && (
-        <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-4">
+        <div className="mt-3 space-y-4 border-t border-border pt-3">
           <FilterGroup label="Type">
             {(Object.keys(CATEGORY_GROUP_LABELS) as CategoryGroup[]).map(group => (
-              <Chip
+              <SegmentedButton
                 key={group}
-                label={CATEGORY_GROUP_LABELS[group]}
+                size="sm"
                 selected={filters.groups.includes(group)}
                 onClick={() => patch({ groups: toggle(filters.groups, group) })}
-              />
+              >
+                {CATEGORY_GROUP_LABELS[group]}
+              </SegmentedButton>
             ))}
           </FilterGroup>
 
           {paymentModes.length > 0 && (
             <FilterGroup label="Payment mode">
               {paymentModes.map(mode => (
-                <Chip
+                <SegmentedButton
                   key={mode}
-                  label={mode}
+                  size="sm"
                   selected={filters.paymentModes.includes(mode)}
                   onClick={() => patch({ paymentModes: toggle(filters.paymentModes, mode) })}
-                />
+                >
+                  {mode}
+                </SegmentedButton>
               ))}
             </FilterGroup>
           )}
@@ -146,41 +153,29 @@ export function AnalyticsFilterBar({
           {categories.length > 0 && (
             <FilterGroup label="Category">
               {categories.map(category => (
-                <Chip
+                <SegmentedButton
                   key={category}
-                  label={category}
+                  size="sm"
                   selected={filters.categories.includes(category)}
                   onClick={() => patch({ categories: toggle(filters.categories, category) })}
-                />
+                >
+                  {category}
+                </SegmentedButton>
               ))}
             </FilterGroup>
           )}
         </div>
       )}
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3 pt-3 border-t border-white/[0.06] text-xs text-muted-foreground">
-        <span className="tabular-nums">
-          {resultCount} {resultCount === 1 ? 'payment' : 'payments'} in view
-        </span>
-        {activeCount > 0 && (
-          <button
-            type="button"
-            onClick={() => patch({ categories: [], paymentModes: [], groups: [] })}
-            className="inline-flex items-center gap-1 font-semibold text-foreground hover:text-primary transition-colors"
-          >
-            <X className="w-3 h-3" />
-            Clear filters
-          </button>
-        )}
-      </div>
     </div>
   );
 }
 
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground mb-2">{label}</p>
+    <div className="min-w-0">
+      <p className="text-micro font-bold uppercase text-muted-foreground mb-2">{label}</p>
+      {/* Wraps rather than scrolls: these lists are long and a hidden scroll
+          strip would bury most of the options. */}
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </div>
   );

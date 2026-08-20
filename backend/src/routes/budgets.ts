@@ -21,6 +21,19 @@ function normalizeAllocations(input: unknown): Allocation[] {
     .filter(item => item.name !== '');
 }
 
+/** Instalment lines carried into a plan, coerced and de-blanked. */
+function normalizeDebts(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map(item => ({
+      debtId: item?.debtId || null,
+      name: typeof item?.name === 'string' ? item.name.trim() : '',
+      amount: Number(item?.amount) || 0,
+      instalments: Number(item?.instalments) || 1,
+    }))
+    .filter(item => item.name !== '');
+}
+
 function normalizeSubscriptions(input: unknown) {
   if (!Array.isArray(input)) return [];
   return input
@@ -44,11 +57,19 @@ function buildUpdate(body: Record<string, unknown>) {
     endDate: body.endDate,
     isActive: body.isActive,
   };
+  if ('label' in body) update.label = typeof body.label === 'string' ? body.label.trim() : '';
+  if ('notes' in body) update.notes = typeof body.notes === 'string' ? body.notes.trim() : '';
+  if ('isDraft' in body) update.isDraft = body.isDraft === true;
+  if ('origin' in body && ['manual', 'planner', 'ai'].includes(String(body.origin))) {
+    update.origin = body.origin;
+  }
   if ('income' in body) update.income = Number(body.income) || 0;
+  if ('incomeIsOverride' in body) update.incomeIsOverride = body.incomeIsOverride === true;
   if ('categories' in body) update.categories = normalizeAllocations(body.categories);
   if ('investments' in body) update.investments = normalizeAllocations(body.investments);
   if ('savings' in body) update.savings = normalizeAllocations(body.savings);
   if ('subscriptions' in body) update.subscriptions = normalizeSubscriptions(body.subscriptions);
+  if ('debts' in body) update.debts = normalizeDebts(body.debts);
   return update;
 }
 
@@ -66,18 +87,26 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const { startDate, endDate, isActive } = req.body;
+    const isDraft = req.body.isDraft === true;
 
-    // If setting to active, deactivate all other budgets
-    if (isActive) {
+    // A draft never displaces the plan in force — that is the entire reason the
+    // state exists. Activating one is a separate, deliberate step.
+    if (isActive && !isDraft) {
       await Budget.updateMany({ userId: req.user!.id }, { isActive: false });
     }
 
     const budget = new Budget({
       userId: req.user!.id,
+      label: typeof req.body.label === 'string' ? req.body.label.trim() : '',
+      notes: typeof req.body.notes === 'string' ? req.body.notes.trim() : '',
       startDate,
       endDate,
-      isActive: isActive || false,
+      isDraft,
+      origin: ['manual', 'planner', 'ai'].includes(String(req.body.origin)) ? req.body.origin : 'manual',
+      isActive: isDraft ? false : isActive || false,
       income: Number(req.body.income) || 0,
+      incomeIsOverride: req.body.incomeIsOverride === true,
+      debts: normalizeDebts(req.body.debts),
       categories: normalizeAllocations(req.body.categories),
       investments: normalizeAllocations(req.body.investments),
       savings: normalizeAllocations(req.body.savings),
@@ -94,8 +123,9 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 // Update a budget
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    // If setting to active, deactivate all other budgets
-    if (req.body.isActive) {
+    // Activating a plan retires whichever one was in force. A budget being
+    // promoted out of draft is the same event, so it runs the same step.
+    if (req.body.isActive && req.body.isDraft !== true) {
       await Budget.updateMany({ userId: req.user!.id, _id: { $ne: req.params.id } }, { isActive: false });
     }
 

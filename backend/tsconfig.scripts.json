@@ -1,0 +1,11 @@
+{
+  // The evaluation harness, typechecked with the same strictness as the app but
+  // kept out of the build: `tsc` emits dist/ for the server, and a scripts/
+  // directory in there would change rootDir and move every output path.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["scripts/**/*.ts", "src/**/*.ts"]
+}

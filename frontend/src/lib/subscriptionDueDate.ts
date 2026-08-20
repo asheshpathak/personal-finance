@@ -1,4 +1,5 @@
 import type { Frequency } from './subscriptionTotals';
+import { formatDay, fromDayKey, isValidDayKey, ordinal, relativeDay } from './dates';
 
 export const DAYS_OF_WEEK = [
   { value: 'monday', label: 'Monday' },
@@ -34,10 +35,15 @@ export interface DueDateFields {
   dueMonth?: number | null;
 }
 
+/** A due-date change waiting for the current cycle to end. */
+export interface PendingSchedule extends DueDateFields {
+  frequency: Frequency;
+}
+
 export function formatDueDate({ frequency, dueDayOfWeek, dueDayOfMonth, dueMonth }: DueDateFields): string {
   switch (frequency) {
     case 'daily':
-      return '—';
+      return 'Every day';
     case 'weekly': {
       if (!dueDayOfWeek) return '—';
       return DAYS_OF_WEEK.find(d => d.value === dueDayOfWeek)?.label ?? dueDayOfWeek;
@@ -54,15 +60,27 @@ export function formatDueDate({ frequency, dueDayOfWeek, dueDayOfMonth, dueMonth
   }
 }
 
-function ordinal(day: number): string {
-  const mod100 = day % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
-  switch (day % 10) {
-    case 1: return `${day}st`;
-    case 2: return `${day}nd`;
-    case 3: return `${day}rd`;
-    default: return `${day}th`;
-  }
+export const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1);
+
+/** "Sep 12, 2026 · in 23 days" — a date plus how far off it is. */
+export function formatNextCharge(nextDueDay: string | null | undefined): string {
+  if (!nextDueDay || !isValidDayKey(nextDueDay)) return '—';
+  const date = fromDayKey(nextDueDay);
+  return `${formatDay(date)} · ${relativeDay(date)}`;
 }
 
-export const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => i + 1);
+/**
+ * Explains a staged due-date change in the user's own terms.
+ *
+ * The rule this describes: editing when a subscription bills does not move a
+ * charge that has already gone out this cycle, so the new date starts applying
+ * at the next one — the same way changing a renewal date works with an app
+ * store. Saying so plainly is what stops it reading as "my edit didn't save".
+ */
+export function describePendingChange(
+  pending: PendingSchedule | null | undefined,
+  effectiveFrom: string | null | undefined
+): string | null {
+  if (!pending || !effectiveFrom || !isValidDayKey(effectiveFrom)) return null;
+  return `Due date moves to ${formatDueDate(pending)} from ${formatDay(fromDayKey(effectiveFrom))}. This cycle keeps the current date.`;
+}
